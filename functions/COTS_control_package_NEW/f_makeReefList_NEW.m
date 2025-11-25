@@ -8,7 +8,7 @@
 % - f_makeReefListTS from Tina Skinner (REEFMOD-GBR.6.8, May 2023)
 % ----------------------------------------------------------------------------------------------------------------------
 function [full_list_ID] = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site,...
-    total_coral_pct2D, COTS_larval_output, last_reef_COTScontrolled)
+    total_coral_pct2D, COTS_larval_output, last_reef_COTScontrolled, all_DHWs)
 
 % Tina 07/2023: now have fixed target reef list in 'New_regions_TS.mat', updated for new GBRMPA 2023 PR list.
 % Control at target (T), then priority (P), then nonpriority reef (N), as specified in 'reef_type'.
@@ -205,7 +205,7 @@ switch META.COTS_reefs2cull_strat
 
         % Combine all lists - this preserves the order priority > nonpriority while re-ordering for zoning within each
         full_list_ID = vertcat(priority_list_tmp2, setdiff(priority_list_tmp2, priority_list_tmp1),...
-            nonpriority_list_tmp2, setdiff(nonpriority_list_tmp2, nonpriority_list_tmp1)); % New list
+            nonpriority_list_tmp2, setdiff(nonpriority_list_tmp2, nonpriority_list_tmp1)); % New list    
 
 end
 

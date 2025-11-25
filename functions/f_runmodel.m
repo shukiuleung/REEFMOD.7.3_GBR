@@ -1356,7 +1356,7 @@ t
             COTS_larval_output = sum(RESULT.COTS_larval_output(:, t-1:t),2); % number of CoTS larvae produced (over 2 time steps) to prioritise larval source
             
             [ RESULT.COTS_all_densities(:,t+1,:), RECORD.control_records(t), RECORD.last_reef_COTScontrolled(t) ] = ...
-                f_COTS_control_NEW(META, RESULT.COTS_all_densities(:, t+1, :), RECORD.last_reef_COTScontrolled(t-1), total_coral_pct2D, COTS_larval_output);
+                f_COTS_control_NEW(META, RESULT.COTS_all_densities(:, t+1, :), RECORD.last_reef_COTScontrolled(t-1), total_coral_pct2D, COTS_larval_output, RECORD.applied_DHWs(:,t));
 
         end
     end

@@ -21,6 +21,13 @@ META.COTS_cull_region = {'FN';'N';'C';'S'};  % All regions -> GBR-wide (previous
 % META.COTS_cull_region = {'S'};  % South (previously strategy #8)
 % META.COTS_cull_region = {'N';'C';'S'}; 
 
+META.doing_COTS_heat_stress_detectibility = 1; %Uses evidance from Cook et al. in review
+
+if META.doing_COTS_heat_stress_detectibility == 1 
+    load("log_culling_dhw_effects.mat"); %Results from Cook et al. 2025 - How does culling change under DHW per size class (roughly mapped from the 4 size classes to the 16 here)
+    META.log_culling_dhw_effects = log_culling_dhw_effects; %Note: will only work with 16 size classes
+end
+
 % Choose culling strategy (detail in f_makeReefList_NEW)
 META.COTS_reefs2cull_strat = 1;
 % 1 - GBRMPA strategy that goes to Target reefs first, then Priority reefs, then Non Priority reefs
@@ -34,6 +41,7 @@ META.COTS_reefs2cull_strat = 1;
 % 16 - GreenZone weighting with CoTS connectivity and coral cover.
 % 17 - BlueZone weighting with CoTS connectivity and coral cover.
 % 18 - CoTS connec and coral cover, same as case 16 and 17 above, but no preferential weighting to blue or green zones.
+
 
 % Updates from Tina (July 2023) - now have fixed target reef list. Control at T, then P, then N.
 load('New_regions_TS.mat') %this has been updated for new GBRMPA 2023 PR list and includes target reefs now

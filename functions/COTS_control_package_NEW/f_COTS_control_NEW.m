@@ -9,7 +9,7 @@
 % ----------------------------------------------------------------------------------------------------------------------
 
 function [COTS_all_densities, control_records, last_reef_COTScontrolled] = ...
-    f_COTS_control_NEW(META, COTS_all_densities, last_reef_COTScontrolled, total_coral_pct2D, COTS_larval_output)
+    f_COTS_control_NEW(META, COTS_all_densities, last_reef_COTScontrolled, total_coral_pct2D, COTS_larval_output, all_DHWs)
 
 %% TEMP FOR DEBUGGING (see also last line for recording last_reef_COTScontrolled in RESULT)
 % function [RESULT, control_records, last_reef_COTScontrolled] = f_COTS_control_NEW(META, RESULT, t)
@@ -51,7 +51,7 @@ current_reef_ET = repmat(0.075,[size(current_COTS_densities,1) 1]); % CANNOT BE 
 % current_COTS = current_COTS_densities;
 % [~, criteriaS, global_trigger, RESULT] = f_makeReefList_TS(META, RESULT, t, 0, current_COTS, thisboatorder, current_COTS_ET, COTS_densities_per_site);
 % ReefList = criteriaS.criteria(:,1); % TEMP - from now only use the ordered list of reef index
-ReefList = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site, total_coral_pct2D, COTS_larval_output, last_reef_COTScontrolled);
+ReefList = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site, total_coral_pct2D, COTS_larval_output, last_reef_COTScontrolled, all_DHWs);
 
 % ReefList must be a selection of META.reef_ID sorted in decreasing order of priority for control
 % Keep track record of key control variables
@@ -62,7 +62,7 @@ visited_reefs = 0; % counter to keep track of how many reefs were culled
 n = 1; % Start with the first reef on the list
 remaining_dives = timestep_dives; %full dive quota at the beginning of a timestep
 
-while remaining_dives > 0 && n <= length(ReefList) %while there are dives remaining
+while remaining_dives > 0 && n <= length(ReefList) %while there are dives remaining and the list not exhausted
     % General description from KH: get first reef ID from the list, check if reef-level trigger is used, then use it;
     % check if site-level trigger is valid at any sites. Go only to those sites, recheck after every run to see if trigger
     % still valid, if not, increase the current_reef by one until out of quota
@@ -97,8 +97,15 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
 
     % Extract COTS density for all sites
     this_reef_COTS_densities_per_site = COTS_densities_per_site{I,1};
-    % Calculates manta tow equivalent (number of coTS per tow) for all sites
-    this_reef_COTS_per_tow_per_site = (0.22/0.6)*sum(this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end),2);
+
+    if META.doing_COTS_heat_stress_detectibility == 1 % Cook et al. in review
+        this_reef_COTS_per_tow_per_site = (0.22/0.6)*sum(this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end),2).*exp(-0.25 * all_DHWs(this_reef_ID));
+        %Scalar unit. Proportion of CoTS per increase in DHW (Ranges from 1-0.02 as a decay function)
+    else
+        % Calculates manta tow equivalent (number of coTS per tow) for all sites
+        this_reef_COTS_per_tow_per_site = (0.22/0.6)*sum(this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end),2);
+    end
+
     % Find sites with manta tows above ecological threshold (ET)
     sites_over_ET = find(this_reef_COTS_per_tow_per_site > current_reef_ET(I));
 
@@ -137,7 +144,20 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
 
             % If allowed to cull
             culling_factor = COTS_per_tow_this_site/current_reef_ET(I); % this is the reduction needed to take CoTS per tow to the ET
-            record_site_post_densities(ctrl_site,META.COTS_adult_min_age:end) = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./culling_factor;
+
+            if META.doing_COTS_heat_stress_detectibility == 1
+                % For calculation of heat stress effects
+                % Calculate excess CoTS density by age class (adults only)
+                excess_abundance = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end) - (this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./culling_factor);
+
+                % Calculate missed CoTS using age-specific DHW effects (adults only)
+                missed = excess_abundance .* (1-exp(META.log_culling_dhw_effects(META.COTS_adult_min_age:end)' * all_DHWs(this_reef_ID)));
+
+                record_site_post_densities(ctrl_site,META.COTS_adult_min_age:end) = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./culling_factor + missed;
+            else
+                record_site_post_densities(ctrl_site,META.COTS_adult_min_age:end) = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./culling_factor;
+            end            
+            
             record_nb_dives = record_nb_dives + control_dives;
             site = site + 1 ;
         end
