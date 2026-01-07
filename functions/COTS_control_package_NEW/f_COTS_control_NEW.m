@@ -77,6 +77,10 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
             this_reef_ID = ReefList(n);
             I = find(META.reef_ID == this_reef_ID); % locate this reef in the reef definition list
 
+            if META.doing_COTS_heat_stress_detectibility == 1
+                current_COTS_per_tow(I) = current_COTS_per_tow(I).*exp(-0.25 * all_DHWs(I)); % Apply detectability reduction due to heat stress if applicable (Cook et al. in review)
+            end
+            
             if current_COTS_per_tow(I) < 0.22 %% If number of CoTS per tow on the reef is above outbreak threshold (Moran and De'ath 1992)
 
                 treat_this_reef = 1; % OK let's do the culling
@@ -98,16 +102,24 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
     % Extract COTS density for all sites
     this_reef_COTS_densities_per_site = COTS_densities_per_site{I,1};
 
+    this_reef_COTS_per_tow_per_site = (0.22/0.6).*(this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end));
+
+
     if META.doing_COTS_heat_stress_detectibility == 1 % Cook et al. in review
-        this_reef_COTS_per_tow_per_site = (0.22/0.6)*sum(this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end),2).*exp(-0.25 * all_DHWs(this_reef_ID));
+
+        this_reef_COTS_per_tow_per_site_reduced = (0.22/0.6).*(this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end)).*exp(-0.25 * all_DHWs(I));
         %Scalar unit. Proportion of CoTS per increase in DHW (Ranges from 1-0.02 as a decay function)
+
+        % Find sites with manta tows (reduced detectability due to DHW) above ecological threshold (ET)
+        sites_over_ET = find(sum(this_reef_COTS_per_tow_per_site_reduced,2) > current_reef_ET(I));
+
     else
-        % Calculates manta tow equivalent (number of coTS per tow) for all sites
-        this_reef_COTS_per_tow_per_site = (0.22/0.6)*sum(this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end),2);
+        % Find sites with manta tows above ecological threshold (ET)
+
+        sites_over_ET = find(sum(this_reef_COTS_per_tow_per_site,2) > current_reef_ET(I));
+
     end
 
-    % Find sites with manta tows above ecological threshold (ET)
-    sites_over_ET = find(this_reef_COTS_per_tow_per_site > current_reef_ET(I));
 
     % We go only to those sites
     if ~isempty(sites_over_ET) && remaining_dives>0 % if there are sites to treat, and dives remaining, do control
@@ -121,13 +133,13 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
         while site <= length(sites_over_ET) && remaining_dives>0 % go through all sites above ET
 
             ctrl_site = sites_over_ET(site) ;
-            COTS_per_tow_this_site = this_reef_COTS_per_tow_per_site(ctrl_site) ;
+            COTS_per_tow_this_site = this_reef_COTS_per_tow_per_site(ctrl_site, META.COTS_adult_min_age:end); % original detectability
 
             % First need to check if we've got enough remaining dives for this site
             % Number of control dives required for culling to this threshold
             % Karlo: here 8 is the standard number of divers, I use team dives per site, using different boats would require a rewrite
             % Ceil to round, as the whole team will finish the dive on the same site
-            control_dives=(ceil((4.18)*(COTS_per_tow_this_site/0.015)^0.667)); %indiv dives
+            control_dives=(ceil((4.18)*(sum(COTS_per_tow_this_site)/0.015)^0.667)); %indiv dives
             % YM: this_site_tow/0.015 converts number of CoTS per tow into a density of CoTS per hectare
 
             % control_dives=ceil(166.7*(COTS_per_tow_this_site/0.015)^0.665); % Fletcher et al. 2021, divided by 40 assuming 40 min bottom time?
@@ -142,21 +154,19 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
                 break % stop control on this reef (breaks this while loop)
             end
 
-            % If allowed to cull
-            culling_factor = COTS_per_tow_this_site/current_reef_ET(I); % this is the reduction needed to take CoTS per tow to the ET
-
             if META.doing_COTS_heat_stress_detectibility == 1
-                % For calculation of heat stress effects
-                % Calculate excess CoTS density by age class (adults only)
-                excess_abundance = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end) - (this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./culling_factor);
 
-                % Calculate missed CoTS using age-specific DHW effects (adults only)
-                missed = excess_abundance .* (1-exp(META.log_culling_dhw_effects(META.COTS_adult_min_age:end)' * all_DHWs(this_reef_ID)));
-
-                record_site_post_densities(ctrl_site,META.COTS_adult_min_age:end) = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./culling_factor + missed;
+                % If allowed to cull, apply heat stress detectability reduction to calculate culling factor = fewer CoTS are removed than required
+                culling_factor = sum(COTS_per_tow_this_site .* (exp(META.log_culling_dhw_effects(META.COTS_adult_min_age:end)' * all_DHWs(I))))/current_reef_ET(I); % this is the reduction needed to take CoTS per tow to the ET
+            
             else
-                record_site_post_densities(ctrl_site,META.COTS_adult_min_age:end) = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./culling_factor;
+
+                % If not applying heat stress detectability reduction, use standard culling factor
+                culling_factor = sum(COTS_per_tow_this_site)/current_reef_ET(I); % this is the reduction needed to take CoTS per tow to the ET
+
             end            
+            
+            record_site_post_densities(ctrl_site,META.COTS_adult_min_age:end) = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./culling_factor;
             
             record_nb_dives = record_nb_dives + control_dives;
             site = site + 1 ;
