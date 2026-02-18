@@ -51,13 +51,13 @@ current_reef_ET = repmat(0.075,[size(current_COTS_densities,1) 1]); % CANNOT BE 
 % current_COTS = current_COTS_densities;
 % [~, criteriaS, global_trigger, RESULT] = f_makeReefList_TS(META, RESULT, t, 0, current_COTS, thisboatorder, current_COTS_ET, COTS_densities_per_site);
 % ReefList = criteriaS.criteria(:,1); % TEMP - from now only use the ordered list of reef index
-ReefList = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site, total_coral_pct2D, COTS_larval_output, last_reef_COTScontrolled, all_DHWs);
+[ReefList, unvisited] = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site, total_coral_pct2D, COTS_larval_output, last_reef_COTScontrolled, all_DHWs);
 
 % ReefList must be a selection of META.reef_ID sorted in decreasing order of priority for control
 % Keep track record of key control variables
 control_records=struct('culled_reef_ID',[], 'culled_density_reef',[], 'culled_density_total',[],...
     'nb_dives',[],'nb_culled_sites',[], 'nb_culled_reefs',[], 'nb_visited_reefs',[], ...
-    'nb_control_sites' , [], 'nb_unvisited_reefs', []);
+    'nb_control_sites' , [], 'nb_unvisited_reefs', unvisited);
 
 visited_reefs = 0; % counter to keep track of how many reefs were culled
 n = 1; % Start with the first reef on the list

@@ -28,13 +28,37 @@ if META.doing_COTS_heat_stress_detectibility == 1
     META.log_culling_dhw_effects = log_culling_dhw_effects; % Note: will only work with 16 size classes
 end
 
+% ========================================================================
 % Suki: load perimeter for estimating manta tow effort (expressed in hours)
 load("perimeter.mat")
 META.perimeter = GBR_REEFS_PERIMETER.PERIMETER; % reef perimeter (metres) calculated using reef polygons in ArcGIS (geodesic)
 META.manta_time = GBR_REEFS_PERIMETER.manta_time; % assuming manta towing 200m per min. perimeter/100/60 = hours it takes to manta tow the entire reef perimeter
 
+% Load distance of reefs from port (to sort reef visitation order)
+% load("distance_port.mat") %need input from Reef Authority
+META.distance_port = zeros(3806,2);
+META.distance_port(:,1) = rand(3806,1); % distance randomise for now
+META.distance_port(:,2) = randi([1,5],3806,1); % port ID randomise for now
+
+% Create pair-wise reef distance matrix 
+reef_coords = [GBR_REEFS.LON, GBR_REEFS.LAT];
+% Preallocate distance matrix
+META.distance_matrix = zeros(size(reef_coords, 1));
+
+% Compute distance between all reef pairs using lldistkm (Haversine formula)
+for i = 1:size(reef_coords, 1)
+    for j = i+1:size(reef_coords, 1)
+        d1km = lldistkm([reef_coords(i,2), reef_coords(i,1)], ...
+                        [reef_coords(j,2), reef_coords(j,1)]);
+        META.distance_matrix(i,j) = d1km;
+        META.distance_matrix(j,i) = META.distance_matrix(i,j); % Make symmetric
+    end
+end
+
+% ========================================================================
+
 % Choose culling strategy (detail in f_makeReefList_NEW)
-META.COTS_reefs2cull_strat = 1;
+META.COTS_reefs2cull_strat = 19;
 % 1 - GBRMPA strategy that goes to Target reefs first, then Priority reefs, then Non Priority reefs
 % 9 - Outbreak front (latitude): GBRMPA strategy that goes to Target reefs first, then also goes to 0.5° lat (~50 km) from target reefs with outbreaks - whole GBR.
 % 10 - Outbreak front (sector): look for the AIMS sector (1-11) that has the highest density of COTS on ALL reefs, start control there, then remaining.

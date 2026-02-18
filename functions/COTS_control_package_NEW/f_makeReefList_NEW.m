@@ -7,7 +7,7 @@
 % - f_makeReefListCCS from Carolina Castro-Sanguino (REEFMOD-GBR.6.6, Mar 2022)
 % - f_makeReefListTS from Tina Skinner (REEFMOD-GBR.6.8, May 2023)
 % ----------------------------------------------------------------------------------------------------------------------
-function [full_list_ID] = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site,...
+function [full_list_ID, unvisited] = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site,...
     total_coral_pct2D, COTS_larval_output, last_reef_COTScontrolled, all_DHWs)
 
 % Tina 07/2023: now have fixed target reef list in 'New_regions_TS.mat', updated for new GBRMPA 2023 PR list.
@@ -25,6 +25,9 @@ function [full_list_ID] = f_makeReefList_NEW(META, current_COTS_densities, curre
 % 1) Set GBRMPA priorities as initially generated for the run, or further randomise for this time step (META.COTS_cull_fixed_reeflist).
 % 2) Create the full list of reef ID based on the specified strategy (META.COTS_reefs2cull_strat)
 % 3) Finally place on top of list the last reef controlled at the previous step, in case it was only paritially controlled
+
+% Initialize unvisited as empty - only populated for case 19
+unvisited = [];
 
 %% Allow for permutation of reef prioritisation
 if META.COTS_cull_fixed_reeflist == 1 % if the reef prioritisation list is fixed over time
@@ -205,7 +208,77 @@ switch META.COTS_reefs2cull_strat
 
         % Combine all lists - this preserves the order priority > nonpriority while re-ordering for zoning within each
         full_list_ID = vertcat(priority_list_tmp2, setdiff(priority_list_tmp2, priority_list_tmp1),...
-            nonpriority_list_tmp2, setdiff(nonpriority_list_tmp2, nonpriority_list_tmp1)); % New list    
+            nonpriority_list_tmp2, setdiff(nonpriority_list_tmp2, nonpriority_list_tmp1)); % New list
+
+    case 19 % relocation only Suki Feb 2026
+         priority_list_tmp0 = vertcat(target_ID, priority_ID);  % each list might be shuffled at every time step, but doesn't matter here. 
+
+         % sort visitation order based on distance from port
+         p_distance_score = META.distance_port(priority_list_tmp0);
+         [~, p_distance_sorted_indices] = sort(p_distance_score, 'ascend'); 
+         priority_list_tmp1 = priority_list_tmp0(p_distance_sorted_indices);
+
+         n_distance_score = META.distance_port(nonpriority_ID);
+         [~, n_distance_sorted_indices] = sort(n_distance_score, 'ascend'); 
+         nonpriority_list_tmp0 = nonpriority_ID(n_distance_sorted_indices);
+
+         % set DHW threshold and search radius
+         DHW_threshold = 2;
+         search_radius = 50;
+         
+         % create all_DHWs table with reef ID for indexing
+         all_DHWs_ID = zeros(META.nb_reefs,2);
+         all_DHWs_ID(:,1) = META.reef_ID;
+         all_DHWs_ID(:,2) = all_DHWs(META.reef_ID)';
+
+         % isolate reefs not exceeding DHW threshold
+         non_exceeding_reefs = all_DHWs_ID(all_DHWs_ID(:,2) <= DHW_threshold); 
+
+         priority_list_tmp2 = [];
+
+         for reef = 1:length(priority_list_tmp1) % for every reef within the priority list
+
+             priority_reef_id = priority_list_tmp1(reef);
+
+             if all_DHWs(priority_reef_id) <= DHW_threshold % if this reef is below DHW threshold
+                 priority_list_tmp2(end+1) = priority_reef_id; % keep the reef in the list
+                 continue
+             end
+             
+             % otherwise find replacement (relocate efforts)
+
+             % extract distances between this reef and all other reef
+             distances = META.distance_matrix(:, priority_list_tmp1(reef)); 
+
+             reefs_within_radius = find(distances <= search_radius & distances > 0); % look for reefs within search radius that is not itself
+                 
+             if isempty(reefs_within_radius)
+                 continue % skip this reef - no replacement is found
+             end
+
+             % sort by distance (ascending)              
+             [~, sort_idx] = sort(distances(reefs_within_radius));
+             reefs_within_radius = reefs_within_radius(sort_idx);
+
+             % apply criteria for suitable reefs = within radius, below DHW threshold, is priority reef
+             suitable_reefs = reefs_within_radius(ismember(reefs_within_radius, non_exceeding_reefs) & ...
+                 ismember(reefs_within_radius, priority_list_tmp1));
+
+             if isempty(suitable_reefs)
+                 continue % skip this reef - no replacement is found
+             end
+
+             % add closest suitable reef instead
+             priority_list_tmp2(end+1) = suitable_reefs(1);
+         end
+
+         priority_list_tmp2 = unique(priority_list_tmp2,'stable')';
+         unvisited = setdiff(priority_list_tmp1,priority_list_tmp2);
+
+         % Combine all lists - this preserves the order priority > nonpriority
+         % in this case priority + DHW above threshold is still better than
+         % any non-priority reef
+        full_list_ID = vertcat(priority_list_tmp2, unvisited, nonpriority_list_tmp0);
 
 end
 
