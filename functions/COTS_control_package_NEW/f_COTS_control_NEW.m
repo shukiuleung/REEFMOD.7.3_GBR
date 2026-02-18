@@ -57,7 +57,7 @@ current_reef_ET = repmat(0.075,[size(current_COTS_densities,1) 1]); % CANNOT BE 
 % Keep track record of key control variables
 control_records=struct('culled_reef_ID',[], 'culled_density_reef',[], 'culled_density_total',[],...
     'nb_dives',[],'nb_culled_sites',[], 'nb_culled_reefs',[], 'nb_visited_reefs',[], ...
-    'nb_control_sites' , [], 'nb_unvisited_reefs', unvisited);
+    'nb_control_sites' , [], 'nb_unvisited_reefs', length(unvisited));
 
 visited_reefs = 0; % counter to keep track of how many reefs were culled
 n = 1; % Start with the first reef on the list
