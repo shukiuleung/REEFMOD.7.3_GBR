@@ -56,7 +56,8 @@ ReefList = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COT
 % ReefList must be a selection of META.reef_ID sorted in decreasing order of priority for control
 % Keep track record of key control variables
 control_records=struct('culled_reef_ID',[], 'culled_density_reef',[], 'culled_density_total',[],...
-    'nb_dives',[], 'nb_culled_sites',[], 'nb_culled_reefs',[], 'nb_visited_reefs',[]);
+    'nb_dives',[],'nb_culled_sites',[], 'nb_culled_reefs',[], 'nb_visited_reefs',[], ...
+    'nb_control_sites' , [], 'nb_unvisited_reefs', []);
 
 visited_reefs = 0; % counter to keep track of how many reefs were culled
 n = 1; % Start with the first reef on the list
@@ -133,7 +134,7 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
         while site <= length(sites_over_ET) && remaining_dives>0 % go through all sites above ET
 
             ctrl_site = sites_over_ET(site) ;
-            COTS_per_tow_this_site = this_reef_COTS_per_tow_per_site(ctrl_site, META.COTS_adult_min_age:end); % original detectability
+            COTS_per_tow_this_site = this_reef_COTS_per_tow_per_site(ctrl_site, :); % original detectability
 
             % First need to check if we've got enough remaining dives for this site
             % Number of control dives required for culling to this threshold
@@ -179,6 +180,9 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
         record_reef_density_culled = sum(COTS_all_densities(I, META.COTS_adult_min_age:end) - record_reef_post_densities(META.COTS_adult_min_age:end));
         control_records.culled_density_reef = [control_records.culled_density_reef ; record_reef_density_culled]; % as total number of adults per 400 m2
         control_records.nb_dives = [control_records.nb_dives ; record_nb_dives];
+
+        % Suki: track records related to survey effort
+        control_records.nb_control_sites = [control_records.nb_control_sites; META.COTS_cull_reeflist.nb_sites(this_reef_ID)];
 
         % Record new density of adults for that reef
         COTS_all_densities(I, META.COTS_adult_min_age:end) = record_reef_post_densities(META.COTS_adult_min_age:end);

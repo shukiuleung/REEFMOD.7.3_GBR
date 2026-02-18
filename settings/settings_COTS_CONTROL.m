@@ -21,12 +21,17 @@ META.COTS_cull_region = {'FN';'N';'C';'S'};  % All regions -> GBR-wide (previous
 % META.COTS_cull_region = {'S'};  % South (previously strategy #8)
 % META.COTS_cull_region = {'N';'C';'S'}; 
 
-META.doing_COTS_heat_stress_detectibility = 1; %Uses evidance from Cook et al. in review
+META.doing_COTS_heat_stress_detectibility = 1; % Uses evidance from Cook et al. in review
 
 if META.doing_COTS_heat_stress_detectibility == 1 
-    load("log_culling_dhw_effects.mat"); %Results from Cook et al. 2025 - How does culling change under DHW per size class (roughly mapped from the 4 size classes to the 16 here)
-    META.log_culling_dhw_effects = log_culling_dhw_effects; %Note: will only work with 16 size classes
+    load("log_culling_dhw_effects.mat"); % Results from Cook et al. 2025 - How does culling change under DHW per size class (roughly mapped from the 4 size classes to the 16 here)
+    META.log_culling_dhw_effects = log_culling_dhw_effects; % Note: will only work with 16 size classes
 end
+
+% Suki: load perimeter for estimating manta tow effort (expressed in hours)
+load("perimeter.mat")
+META.perimeter = GBR_REEFS_PERIMETER.PERIMETER; % reef perimeter (metres) calculated using reef polygons in ArcGIS (geodesic)
+META.manta_time = GBR_REEFS_PERIMETER.manta_time; % assuming manta towing 200m per min. perimeter/100/60 = hours it takes to manta tow the entire reef perimeter
 
 % Choose culling strategy (detail in f_makeReefList_NEW)
 META.COTS_reefs2cull_strat = 1;
@@ -121,8 +126,8 @@ META.control_effort_allocation = 0.9; %Proportion of control effort to go to cul
 
 for i=1:boats %for each boat
         
-META.boatProperties.totalTeamDives(i)=META.boatProperties.boatDays(i)*META.diven*META.control_effort_allocation;%total dives a team can make; each should be on a new site
-META.boatProperties.totalInidvDives(i)=META.boatProperties.boatDays(i)*META.diven*META.boatProperties.divers(i)*META.control_effort_allocation;%tdives of individual divers; note that this assumes divers fromt eh same boat can all be on different sites on the same reef durign the same dive which is probably unrealistic
+    META.boatProperties.totalTeamDives(i)=META.boatProperties.boatDays(i)*META.diven*META.control_effort_allocation;%total dives a team can make; each should be on a new site
+    META.boatProperties.totalInidvDives(i)=META.boatProperties.boatDays(i)*META.diven*META.boatProperties.divers(i)*META.control_effort_allocation;%tdives of individual divers; note that this assumes divers from the same boat can all be on different sites on the same reef during the same dive which is probably unrealistic
 
 end
 
