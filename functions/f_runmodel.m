@@ -93,7 +93,7 @@ end
 % 'RECORD' stores events occuring at each time step (i.e., t)
 RECORD.applied_DHWs = zeros(META.nb_reefs, META.nb_time_steps,'single') ;
 bleaching_mortalities = zeros(META.nb_reefs, META.nb_time_steps) ; % community-level mortality (from DHW) before application (needs to be double)
-RECORD.applied_bleaching_mortality = zeros(META.nb_reefs, META.nb_time_steps) ; % community-level mortality actually applied (given DHW threshold and cyclone)
+RECORD.bleaching_mortality = zeros(META.nb_reefs, META.nb_time_steps, META.nb_coral_types,'single') ; % March 2026: realised mortality per species (replaces 'applied_bleaching_mortality')
 RECORD.hurricane_events = uint8(zeros(META.nb_reefs, META.nb_time_steps)) ;
 RECORD.hurricane_parm_k = zeros(META.nb_reefs, META.nb_time_steps, 'single');
 
@@ -572,7 +572,7 @@ t
         if META.doing_water_quality == 1
 
             REEF(n).CORAL_recruit_survival = REEF_POP(select_layer).CORAL_recruit_survival(n,1).*ones(1,META.nb_coral_types);
-            REEF(n).CORAL_recruit_survival(1,4:6) = 1; % Full survival for non-Acropora groups
+            REEF(n).CORAL_recruit_survival(1,4:6) = 1 ;% Full survival for non-Acropora groups
             REEF(n).CORAL_juvenile_growth = REEF_POP(select_layer).CORAL_juvenile_growth(n,season+1)*CORAL.juvenile_growth_rate;
         else
             REEF(n).CORAL_recruit_survival = ones(1,META.nb_coral_types);
@@ -818,10 +818,11 @@ t
         %%%% --------------------------------------------------------------
         if META.doing_bleaching == 1 && season == 0
 
+            RECORD.applied_DHWs(n,t) = REEF(n).predicted_DHWs(1,t); % March 2026: record the predicted DHW, even if there is a cyclone
+
             if REEF(n).predicted_DHWs(t)>= META.DHW_threshold
 
-                % only bleach if no cyclone (category = 0) or there was a cyclone but no cooling effect (cyclone before
-                % bleaching or far too after)
+                % only bleach if no cyclone (category = 0) or there was a cyclone but no cooling effect (allow_cyclone_cooling = 0)
                 if RECORD.hurricane_events(n,t) == 0 || META.allow_cyclone_cooling(t) == 0
 
                     % 10/2023 -> now using f_bleaching_new3
@@ -830,8 +831,8 @@ t
                         CORAL, META.doing_3D, META.nb_coral_types, META.doing_clades, META.doing_genetics, ...
                         META.bleaching_whole_offset, META.bleaching_partial_offset,REEF(n).Topt_baseline, META.Topt2index);
 
-                    RECORD.applied_DHWs(n,t) = REEF(n).predicted_DHWs(1,t);
-                    RECORD.applied_bleaching_mortality(n,t) = single(bleaching_mortalities(n,t)); % record the bleaching mortality effectively applied
+                    % RECORD.applied_bleaching_mortality(n,t) = single(bleaching_mortalities(n,t)); % record the bleaching mortality effectively applied
+                    RECORD.bleaching_mortality(n,t,:) = single(total_mortality_bleaching); % March 2026: now record realised mortality per species
                     RECORD.coral_pct2D_lost_bleaching(n,t,:) = 100*total_coral_loss_bleaching/sum(REEF(n).substrate_SA_cm2);
                 end
             end
@@ -935,10 +936,17 @@ t
             %% CORAL OUTPLANTING
             if RECORD.outplanted_reefs(n,t)==1
 
-                %Need to re-arrange coral matrix in case if wasn't previously done (depends on t)
+                %Need to re-arrange coral matrix in case it wasn't previously done (depends on t)
                 [metapop(n).coral, metapop(n).genes] = f_struct_arrange(metapop(n).coral, metapop(n).genes, META);
 
                 if META.outplant_density_variable==1
+
+                    if isempty(META.total_nb_outplants)==1
+
+                        Density_to_outplant = META.outplant_species_prop .* META.outplanted_density;
+
+                    else
+
                     % Deployed density was calculated at t-1 depending on total coral cover but does not necessarily match the number of
                     % corals to deploy (depends on what was available on the last deployed reef). So we need to recalculate density:
                     Density_to_outplant = META.outplant_species_prop .* All_reef_nb_corals_to_outplant(n)/META.coral_deployment.DeploymentArea_km2(n)/1e6;
@@ -946,6 +954,8 @@ t
                     % Mar 2024: code above needs to be re-visited following relationship with coral cover
                     % Previous version was calculating density as function of nb corals available for that reef and the
                     % actual area of deployment but now proportion of reef area under deployment is fixed
+                    end
+
                 else
                     % Density_to_outplant = META.outplant_species_prop .* META.outplanted_density;
                     error('Option for outplanting with a fixed density but variable deployment area is not implemented yet. Make sure META.outplant_density_variable is set to "1" in settings_RESTORATION')
@@ -953,10 +963,20 @@ t
 
                 seed=rng;
 
+                % Determine the average mean HT of each group at the time coral was collected for breeding in captivity (nb years before current time step)
+                if t > META.outplant_breeding_time
+                    Baseline_coral_HT_mean = squeeze(nanmean(RESULT.coral_HT_mean(:,t-META.outplant_breeding_time,:),1)); % mean HT of coral adults n years before = representative time of at that time = new basis for enhancement
+                else
+                    Baseline_coral_HT_mean = squeeze(nanmean(RESULT.coral_HT_mean(:,t,:),1)); % mean HT of coral adults at that time = new basis for enhancement
+                end
+                
+                Baseline_coral_HT_mean(isnan(Baseline_coral_HT_mean))=0; % force any NaN to 0
+                
                 [metapop(n).coral, metapop(n).algal, metapop(n).genes, ID_colony_tracking(n,:), RECORD.total_outplanted(n,t,:)] = ...
                     f_coral_deployment(metapop(n).coral, metapop(n).algal, metapop(n).genes, REEF(n), ID_colony_tracking(n,:),...
                     META, Density_to_outplant, META.outplant_coral_diameter_mean, META.outplant_coral_diameter_sd, REEF(n).restored_cells,...
-                    META.MEAN_HT_outplants,META.VAR_HT_outplants,META.MAX_HT_outplants) ;
+                    META.MEAN_HT_outplants + Baseline_coral_HT_mean',... % thermal enhancement of outplants relative to the regional HT at that time
+                    META.VAR_HT_outplants,META.MAX_HT_outplants) ;
 
                 rng(seed);
             end
@@ -991,6 +1011,7 @@ t
                     living_planar_coral_cover_cm2 = full(sum(metapop(n).coral(s).cover_cm2(REEF(n).restored_cells,:),2)) ;
                     RESULT.coral_pct2D_restored_sites(n,t+1,s) = 100*sum(living_planar_coral_cover_cm2)./sum(REEF(n).substrate_SA_cm2(REEF(n).restored_cells))  ;
                 end
+
             end
         end
 
@@ -1213,7 +1234,8 @@ t
     if META.doing_restoration == 1
 
         % 1) Coral outplanting -----------------------------------------
-        if sum(META.doing_coral_outplanting) > 0 % (if doing outplanting)
+        if sum(META.doing_coral_outplanting) > 0 % (if doing outplanting) Note could just do if sum(META.doing_coral_outplanting(1,1:t+1) > 0
+        % if sum(META.doing_coral_outplanting(1:t+1)) > 0 % doesnt work because t+1>META.nb_time_steps
 
             if t < META.nb_time_steps && META.doing_coral_outplanting(t+1)==1
 
@@ -1239,24 +1261,42 @@ t
                 select_reefs = find(Priority_reef_states < META.threshold_for_deploying.max_cover & Priority_reef_states>META.threshold_for_deploying.min_cover);
                 Priority_reef_ID = Priority_reef_ID(select_reefs);
 
-                r = 0;
-                Total_available_outplants = META.total_nb_outplants;
-                All_reef_nb_corals_to_outplant = zeros(size(All_reef_states)); % total nb of outplants that should be deployed
+                if isempty(META.total_nb_outplants)==1 % if not deploying a specific number of outplants but simply a density
 
-                while Total_available_outplants > 0 && r+1 <= length(Priority_reef_ID) % this stops when no more priorty reefs
-                    r = r + 1;
-                    reef_index = find(META.reef_ID == Priority_reef_ID(r));
+                    if isempty(select_reefs)==0
 
-                    % All_reef_nb_corals_to_outplant(reef_index) = round(All_reef_outplanting_densities(reef_index)*Total_available_outplants...
-                    %                         *META.coral_deployment.DeploymentArea_km2(reef_index));
-                    All_reef_nb_corals_to_outplant(reef_index) = round(All_reef_outplanting_densities(reef_index)*1e6*META.coral_deployment.DeploymentArea_km2(reef_index));
-                    Total_available_outplants = Total_available_outplants - All_reef_nb_corals_to_outplant(reef_index);
-                    RECORD.outplanted_reefs(reef_index,t+1)=1;
+                        % selectReefIndex = ismember(META.reef_ID,Priority_reef_ID);
+
+                        for k = 1:length(select_reefs)
+                            
+                            findMyReef = find(META.reef_ID == Priority_reef_ID(k));
+                            RECORD.outplanted_reefs(findMyReef,t+1)=1;
+
+                            % if sum(RECORD.outplanted_reefs(findMyReef,1:t)) < 1 % only outplant for 5 times
+                            %     RECORD.outplanted_reefs(findMyReef,t+1)=1;
+                            % end
+                        end
+                    end
+
+                else
+                    r = 0;
+                    Total_available_outplants = META.total_nb_outplants;
+                    All_reef_nb_corals_to_outplant = zeros(size(All_reef_states)); % total nb of outplants that should be deployed
+
+                    while Total_available_outplants > 0 && r+1 <= length(Priority_reef_ID) % this stops when no more priorty reefs
+                        r = r + 1;
+                        reef_index = find(META.reef_ID == Priority_reef_ID(r));
+
+                        % All_reef_nb_corals_to_outplant(reef_index) = round(All_reef_outplanting_densities(reef_index)*Total_available_outplants...
+                        %                         *META.coral_deployment.DeploymentArea_km2(reef_index));
+                        All_reef_nb_corals_to_outplant(reef_index) = round(All_reef_outplanting_densities(reef_index)*1e6*META.coral_deployment.DeploymentArea_km2(reef_index));
+                        Total_available_outplants = Total_available_outplants - All_reef_nb_corals_to_outplant(reef_index);
+                        RECORD.outplanted_reefs(reef_index,t+1)=1;
+                    end
+
+                    % Re-adjust to the total number of outplants available
+                    All_reef_nb_corals_to_outplant = ceil(All_reef_nb_corals_to_outplant/sum(All_reef_nb_corals_to_outplant)*META.total_nb_outplants);
                 end
-
-                % Re-adjust to the total number of outplants available
-                All_reef_nb_corals_to_outplant = ceil(All_reef_nb_corals_to_outplant/sum(All_reef_nb_corals_to_outplant)*META.total_nb_outplants);
-
             end
         end
 

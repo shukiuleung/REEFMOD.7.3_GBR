@@ -57,7 +57,8 @@ current_reef_ET = repmat(0.075,[size(current_COTS_densities,1) 1]); % CANNOT BE 
 % Keep track record of key control variables
 control_records=struct('culled_reef_ID',[], 'culled_density_reef',[], 'culled_density_total',[],...
     'nb_dives',[],'nb_culled_sites',[], 'nb_culled_reefs',[], 'nb_visited_reefs',[], ...
-    'nb_control_sites' , [], 'nb_unvisited_reefs', length(unvisited));
+    'nb_control_sites' , [], 'nb_unvisited_reefs', length(unvisited), 'manta_time', [], 'total_manta_time', 0, ...
+    'remaining_dives', 0);
 
 visited_reefs = 0; % counter to keep track of how many reefs were culled
 n = 1; % Start with the first reef on the list
@@ -183,6 +184,8 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
 
         % Suki: track records related to survey effort
         control_records.nb_control_sites = [control_records.nb_control_sites; META.COTS_cull_reeflist.nb_sites(this_reef_ID)];
+        control_records.manta_time = [control_records.manta_time; META.manta_time(this_reef_ID)];
+        control_records.total_manta_time = control_records.total_manta_time + META.manta_time(this_reef_ID);
 
         % Record new density of adults for that reef
         COTS_all_densities(I, META.COTS_adult_min_age:end) = record_reef_post_densities(META.COTS_adult_min_age:end);
@@ -192,7 +195,7 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
     n = n + 1; % go to the next reef
 end
 
-% % control_records.remaining_dives = remaining_dives; % record the remaining control effort when simulating less then 3,806 reefs - useless because always 0!!
+control_records.remaining_dives = remaining_dives; % record the remaining control effort when simulating less then 3,806 reefs - useless because always 0!!
 control_records.nb_culled_reefs = length(control_records.culled_reef_ID);
 control_records.nb_visited_reefs = visited_reefs;
 control_records.culled_density_total = sum(control_records.culled_density_reef.*control_records.nb_culled_sites)*1e5/400;

@@ -6,10 +6,10 @@
 % Modified (08/2018) to integrate genetic adaptation to warming
 % Modified (06/2023) to integrate inter-individual heat tolerance
 % Modified (10/2023) after adding heritability in HT
-
+% Modified (03/2026) for tracking realised mortality per species
 % -------------------------------------------------------------------------
 
-function [coral, genes, algal, total_coral_loss, total_mortality] = f_bleaching_new3(coral, genes, algal, bleaching_whole_mortality,...
+function [coral, genes, algal, coral_cover_loss, coral_mortality] = f_bleaching_new3(coral, genes, algal, bleaching_whole_mortality,...
     CORAL, doing_3D, nb_coral_types, doing_clades, doing_genetics, bleaching_whole_offset, bleaching_partial_offset,Topt_baseline, Topt2index)
 
 % Extract data from the structures (need to be filled again when leaving)
@@ -76,7 +76,7 @@ else % code with genetics needs to be re-visited in light of new HT
             
             % New (06/2023): heat tolerance effect size for each colony affects their sensitivity coefficient to bleaching
             % Note this variability is independent of coral genotypes
-            %             sensitivity_bleaching(:,col_start:col_stop) = CORAL.sensitivity_bleaching(s);
+            % sensitivity_bleaching(:,col_start:col_stop) = CORAL.sensitivity_bleaching(s);
             sensitivity_bleaching(:,col_start:col_stop)= CORAL.sensitivity_bleaching(s)*exp(-0.347*coral_HT(:,col_start:col_stop));
             extent_bleaching(:,col_start:col_stop) = CORAL.bleaching_partial_extent(s);
             proba_switching(:,col_start:col_stop)= CORAL.proba_switching(s) ;
@@ -88,11 +88,11 @@ else % code with genetics needs to be re-visited in light of new HT
     end    
 end
 
-if doing_clades == 1
+% if doing_clades == 1
     % Clade-induced tolerance to thermal stress
-    % THIS NEEDS TO BE REVISED DUE TO NEW IMPLEMENTATION OF CORAL TOLERANCE PER INDIVIDUAL
+    % THIS NEEDS TO BE REVISITED DUE TO NEW IMPLEMENTATION OF CORAL TOLERANCE PER INDIVIDUAL
 %     sensitivity_bleaching(clade==2) = sensitivity_bleaching(clade==2) * CORAL.bleaching_tolerance_clade ;
-end
+% end
 
 %________________________________
 %
@@ -115,18 +115,14 @@ coral_loss = coral_cm2.*id_dead ;
 
 algal_cm2(:,1) = algal_cm2(:,1) + sum(coral_loss,2) ;
 % coral_cm2(id_dead==1) = - coral_cm2(id_dead==1);  % now dead (negatives)
-coral_cm2(id_dead==1) = 0; 
-total_mortality = sum(sum(id_dead))/sum(sum(id1));
+coral_cm2(id_dead==1) = 0; % we do not track dead colonies (negatives) any more
 
 %________________________________
 %
 % Partial mortality
 %________________________________
 
-% Note we don mot account for bleaching history (a survivor keeps the same bleaching probability)
-% NOTE from YM: we now (01/2015) apply the same reduction to the probability of partial mortality 
-
-id2 = id1 - id_dead ;
+id2 = id1 - id_dead ; % update the survivors
 prob_partial_mortality = id2.*(1-(1-prob_initial_mortality).^bleaching_partial_offset); % May 2023 -> use initial mortality which is already capped to 1
 
 id_part = id0 ;
@@ -144,6 +140,7 @@ if doing_clades == 1
     clade(rand_switch < proba_switching & coral_cm2>0) = 2 ; % NOTE THIS INDEPENDENT OF BLEACHING MORTALITY
 end
 
+
 %%%%%%%% Before leaving, store the new covers into 'coral' and 'algal'%%%%%%%%%%%%%%%%%%%%
 [coral] = f_struct_rebuild (coral_cm2, coral_HT, surface_cm2, volume_cm3, colony_ID, clade, species_ID, nb_coral_types, doing_clades, doing_3D);
 
@@ -151,14 +148,14 @@ for a=1:size(algal_cm2, 2)
     algal(a).cover_cm2(:,1) = algal_cm2(:,a) ;
 end
 
-% total_coral_loss = sum(sum(coral_loss,2)) + sum(sum(bleach_extent, 2)) ;
-
-% NEW Jul 2020: keep track of losses per species
+%%%%%%%% Keep track of losses per species
 count = 1;
-total_coral_loss = zeros(1,nb_coral_types);
+coral_cover_loss = zeros(1,nb_coral_types); % loss of coral cover per species (as aresult of whole-colony + partial mortality
+coral_mortality = coral_cover_loss; % realised mortality per species (proportion of colonies lost due to bleaching)
 
 for s = 1:nb_coral_types
-    select_sp = count:(count+species_ID(s)-1);
-    total_coral_loss(s) = sum(sum(coral_loss(:,select_sp)))+sum(sum(bleach_extent(:,select_sp)));
-    count = count+species_ID(s);
+    select_sp = count:(count + species_ID(s)-1);
+    coral_cover_loss(s) = sum(sum(coral_loss(:,select_sp)))+sum(sum(bleach_extent(:,select_sp)));
+    coral_mortality(s) = sum(sum(id_dead(:,select_sp)))/sum(sum(id1(:,select_sp)));
+    count = count + species_ID(s);
 end    

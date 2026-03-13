@@ -56,15 +56,15 @@ if OPTIONS.doing_size_frequency == 1
     nb_coral_adult = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1, META.nb_coral_types, 6, 'uint16') ;
 end
 
-% 2) Coral cover loss for each stressor (need to add initial step)
+% 2) Coral loss for each stressor (need to add initial step)
 coral_cover_lost_bleaching = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1, META.nb_coral_types, 'single');
 coral_cover_lost_cyclones = coral_cover_lost_bleaching;
 coral_cover_lost_COTS = coral_cover_lost_bleaching;
+coral_mortality_bleaching = coral_cover_lost_bleaching;
 
 % 3) Stress records
 record_applied_cyclones = zeros(NB_SIMULATIONS, META.nb_reefs, TIME,'uint8');
 record_applied_DHWs = zeros(NB_SIMULATIONS, META.nb_reefs, TIME,'single');
-record_applied_bleaching_mortality  = zeros(NB_SIMULATIONS, META.nb_reefs, TIME,'single');
 
 % 4) Connectivity sequence records (NOW IN META.connectivity for a single run but need to be collected for all runs)
 % Note index values were generated every time steps, yet spawning only happens in summer, so selection starts with the first value then every 2 values
@@ -74,17 +74,20 @@ record_spawning_chronology_COTS = zeros(NB_SIMULATIONS, TIME,'uint8'); % sequenc
 % 5) Restoration records (TO BE TESTED)
 if OPTIONS.doing_restoration==1
 
-    % Total nb of outplants per reef per time step
-    record_total_outplants_deployed = zeros(NB_SIMULATIONS, META.nb_reefs, TIME, META.nb_coral_types,'uint16');
-    record_outplanted_reefs = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1,'uint8');
+    if sum(sum(OUTPUTS(1).RECORD.outplanted_reefs))> 1
+        % Total nb of outplants per reef per time step
+        record_total_outplants_deployed = zeros(NB_SIMULATIONS, META.nb_reefs, TIME, META.nb_coral_types,'uint16');
+        record_outplanted_reefs = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1,'uint8');
+    end
 
-    record_total_larvae_deployed = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1, META.nb_coral_types,'uint16');
-    record_enriched_reefs = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1,'uint8');
+    if sum(sum(OUTPUTS(1).RECORD.enriched_reefs))> 1
+        record_total_larvae_deployed = zeros(NB_SIMULATIONS, META.nb_reefs, TIME, META.nb_coral_types,'uint16');
+        record_enriched_reefs = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1,'uint8');
+    end
 
-    record_rubble_pct2D_stabilised = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1,'single');
-    record_stabilised_reefs = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1,'uint8');
-
-    record_fogged_reefs = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1,'uint8');
+    % record_rubble_pct2D_stabilised = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1,'single');
+    % record_stabilised_reefs = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1,'uint8');
+    % record_fogged_reefs = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1,'uint8');
 
     coral_cover_per_taxa_restored_sites = zeros(NB_SIMULATIONS,META.nb_reefs,TIME+1,META.nb_coral_types,'single');
 
@@ -154,36 +157,43 @@ for simul = 1:NB_SIMULATIONS
     tmp_coral_cover_lost_bleaching = squeeze(OUTPUTS(simul).RECORD.coral_pct2D_lost_bleaching);
     tmp_coral_cover_lost_cyclones = squeeze(OUTPUTS(simul).RECORD.coral_pct2D_lost_cyclones);
     tmp_coral_cover_lost_COTS = squeeze(OUTPUTS(simul).RECORD.coral_pct2D_lost_COTS);
+    tmp_coral_mortality_bleaching = squeeze(OUTPUTS(simul).RECORD.bleaching_mortality);
 
     coral_cover_lost_bleaching(simul,:,2:end,:) = tmp_coral_cover_lost_bleaching(:,1:(scale+1):end,:);
     coral_cover_lost_cyclones(simul,:,2:end,:) = tmp_coral_cover_lost_cyclones(:,1:(scale+1):end,:);
     coral_cover_lost_COTS(simul,:,2:end,:) = tmp_coral_cover_lost_COTS(:,1:(scale+1):end,:);
+    coral_mortality_bleaching(simul,:,2:end,:) = tmp_coral_mortality_bleaching(:,1:(scale+1):end,:);
 
     % 3) Stress records
     tmp_record_applied_cyclones = squeeze(OUTPUTS(simul).RECORD.hurricane_events);
     tmp_record_applied_DHWs = squeeze(OUTPUTS(simul).RECORD.applied_DHWs);
-    tmp_record_applied_bleaching_mortality = squeeze(OUTPUTS(simul).RECORD.applied_bleaching_mortality);
 
     record_applied_cyclones(simul,:,:) = tmp_record_applied_cyclones(:,1:(scale+1):end);
     record_applied_DHWs(simul,:,:) = tmp_record_applied_DHWs(:,1:(scale+1):end);
-    record_applied_bleaching_mortality(simul,:,:) = tmp_record_applied_bleaching_mortality(:,1:(scale+1):end);
 
    % 4) Connectivity sequence records  
     record_spawning_chronology_CORAL(simul,:) =  cell2mat(OUTPUTS(simul).RECORD.spawning_chronology_CORAL(2,1:(scale+1):end));
     record_spawning_chronology_COTS(simul,:) =  cell2mat(OUTPUTS(simul).RECORD.spawning_chronology_COTS(2,1:(scale+1):end));
 
-    % 5) Restoration records (NEED TO BE TESTED)
+    % 5) Restoration records
     if  OPTIONS.doing_restoration==1
-        record_total_outplants_deployed(simul,:,:,:) = squeeze(OUTPUTS(simul).RECORD.total_outplanted(:,1:(scale+1):end));
-        record_outplanted_reefs(simul,:,:) = squeeze(OUTPUTS(simul).RECORD.outplanted_reefs(:,1:(scale+1):end));
-        record_total_larvae_deployed(simul,:,:,:) = squeeze(OUTPUTS(simul).RECORD.total_enriched(:,1:(scale+1):end));
-        record_enriched_reefs(simul,:,:) = squeeze(OUTPUTS(simul).RECORD.enriched_reefs(:,1:(scale+1):end));
-        record_rubble_pct2D_stabilised(simul,:,:) = squeeze(OUTPUTS(simul).RECORD.rubble_cover_pct2D_stabilised(:,1:end));
-        record_stabilised_reefs(simul,:,:) = squeeze(OUTPUTS(simul).RECORD.stabilised_reefs(:,1:(scale+1):end));
-        % record_fogged_reefs(simul,:,:) = RECORD.fogged_reefs;
+
+        if sum(sum(OUTPUTS(simul).RECORD.outplanted_reefs))> 1
+            record_total_outplants_deployed(simul,:,1:end,:) = squeeze(OUTPUTS(simul).RECORD.total_outplanted(:,1:(scale+1):end,:));
+            record_outplanted_reefs(simul,:,1:end) = squeeze(OUTPUTS(simul).RECORD.outplanted_reefs(:,1:(scale+1):end));
+        end
+
+        if sum(sum(OUTPUTS(simul).RECORD.enriched_reefs))> 1
+            record_total_larvae_deployed(simul,:,1:end,:) = squeeze(OUTPUTS(simul).RECORD.total_enriched(:,1:(scale+1):end,:));
+            record_enriched_reefs(simul,:,1:end) = squeeze(OUTPUTS(simul).RECORD.enriched_reefs(:,1:(scale+1):end));
+        end
+
+        % record_rubble_pct2D_stabilised(simul,:,2:end) = squeeze(OUTPUTS(simul).RECORD.rubble_cover_pct2D_stabilised(:,1:end));
+        % record_stabilised_reefs(simul,:,2:end) = squeeze(OUTPUTS(simul).RECORD.stabilised_reefs(:,1:(scale+1):end));
+        % record_fogged_reefs(simul,:,2:end) = RECORD.fogged_reefs;
 
         tmp_coral_cover_per_taxa_restored_sites = squeeze(cat(4,OUTPUTS(simul).RESULT.coral_pct2D_restored_sites));
-        coral_cover_per_taxa_restored_sites(simul,:,:,:) = sum_time_4D(tmp_coral_cover_per_taxa_restored_sites, scale, cols);
+        coral_cover_per_taxa_restored_sites(simul,:,:,:) = average_time_4D(tmp_coral_cover_per_taxa_restored_sites, scale, cols);
     end
 
     % 6) Other variables
@@ -228,8 +238,7 @@ for simul = 1:NB_SIMULATIONS
         if NB_TIME_STEPS > META.COTS_control_start
 
             record_COTS_control(simul).control_records = OUTPUTS(simul).RECORD.control_records;
-            % New way of storing control records, for each simulation, separetely, and at each time step, separetely.
-            % Includes:
+            % New way of storing control records, for each simulation (separetely) at each time step (separetely), including:
             % - culled_reef_ID: list of reef ID that were culled (the last reef ID may have been partially culled)
             % - culled_density: total density (per 400 m2) of CoTS adults killed per culled reef
             % - nb_dives: number of dives simulated at each culled reef
@@ -249,6 +258,7 @@ reef_shelter_volume_relative = sum(total_shelter_volume_per_taxa,4)/total_shelte
 reef_shelter_volume_relative(reef_shelter_volume_relative>1)=1;
 reef_shelter_volume_relative(reef_shelter_volume_relative<0)=0;
 
+%% Further optimisation of storage
 % New (08/2021): only record COTS densities by yearly classes to reduce output size
 % COTS_densities = COTS_densities0(:,:,:,1:2:end)+COTS_densities0(:,:,:,2:2:end);
 % 09/2021: now just sum across all juveniles and across all adults
@@ -256,6 +266,16 @@ if OPTIONS.doing_COTS == 1
     COTS_juv_densities = sum(COTS_densities(:,:,:,1:(META.COTS_adult_min_age-1)),4);
     COTS_adult_densities = sum(COTS_densities(:,:,:,META.COTS_adult_min_age:end),4);
 end
+
+% (11/2025): only record total nb of corals, not nb of corals persize class
+nb_coral_juv = uint16(sum(nb_coral_juv,5));
+nb_coral_adol = uint16(sum(nb_coral_adol,5));
+nb_coral_adult = uint16(sum(nb_coral_adult,5));
+
+% (11/2025): save coral cover lost as integrer values
+coral_cover_lost_bleaching = uint8(coral_cover_lost_bleaching);
+coral_cover_lost_cyclones = uint8(coral_cover_lost_cyclones);
+coral_cover_lost_COTS = uint8(coral_cover_lost_COTS);
 
 %% SAVE OUTPUTS
 % delete all the tmp objects

@@ -58,7 +58,7 @@ end
 % ========================================================================
 
 % Choose culling strategy (detail in f_makeReefList_NEW)
-META.COTS_reefs2cull_strat = 19;
+META.COTS_reefs2cull_strat = 1;
 % 1 - GBRMPA strategy that goes to Target reefs first, then Priority reefs, then Non Priority reefs
 % 9 - Outbreak front (latitude): GBRMPA strategy that goes to Target reefs first, then also goes to 0.5° lat (~50 km) from target reefs with outbreaks - whole GBR.
 % 10 - Outbreak front (sector): look for the AIMS sector (1-11) that has the highest density of COTS on ALL reefs, start control there, then remaining.
@@ -70,6 +70,7 @@ META.COTS_reefs2cull_strat = 19;
 % 16 - GreenZone weighting with CoTS connectivity and coral cover.
 % 17 - BlueZone weighting with CoTS connectivity and coral cover.
 % 18 - CoTS connec and coral cover, same as case 16 and 17 above, but no preferential weighting to blue or green zones.
+% 19 - Adpative Control during bleaching = default (WIP)
 
 
 % Updates from Tina (July 2023) - now have fixed target reef list. Control at T, then P, then N.

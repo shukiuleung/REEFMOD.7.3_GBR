@@ -52,6 +52,8 @@ end
 % 16 - GreenZone weighting with CoTS connectivity and coral cover.
 % 17 - BlueZone weighting with CoTS connectivity and coral cover.
 % 18 - CoTS connec and coral cover, same as case 16 and 17 above, but no preferential weighting to blue or green zones.
+% 19 - Adaptive Control during bleaching = default (WIP)
+
 switch META.COTS_reefs2cull_strat
 
     case 1 % GBRMPA strategy that goes to Target reefs first, then Priority reefs, then Non Priority reefs
@@ -212,6 +214,9 @@ switch META.COTS_reefs2cull_strat
 
     case 19 % relocation only Suki Feb 2026
          priority_list_tmp0 = vertcat(target_ID, priority_ID);  % each list might be shuffled at every time step, but doesn't matter here. 
+         % Here we assume priority >>> non-priority. so even though a
+         % p reef exceeds the DHW threshold, it still has a higher
+         % priority than a n reef. 
 
          % sort visitation order based on distance from port
          p_distance_score = META.distance_port(priority_list_tmp0);
