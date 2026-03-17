@@ -9,7 +9,7 @@
 % Modified (03/2026) for tracking realised mortality per species
 % -------------------------------------------------------------------------
 
-function [coral, genes, algal, coral_cover_loss, coral_mortality] = f_bleaching_new3(coral, genes, algal, bleaching_whole_mortality,...
+function [coral, genes, algal, coral_cover_loss, coral_mortality, total_mortality] = f_bleaching_new3(coral, genes, algal, bleaching_whole_mortality,...
     CORAL, doing_3D, nb_coral_types, doing_clades, doing_genetics, bleaching_whole_offset, bleaching_partial_offset,Topt_baseline, Topt2index)
 
 % Extract data from the structures (need to be filled again when leaving)
@@ -116,6 +116,7 @@ coral_loss = coral_cm2.*id_dead ;
 algal_cm2(:,1) = algal_cm2(:,1) + sum(coral_loss,2) ;
 % coral_cm2(id_dead==1) = - coral_cm2(id_dead==1);  % now dead (negatives)
 coral_cm2(id_dead==1) = 0; % we do not track dead colonies (negatives) any more
+total_mortality = sum(sum(id_dead))/sum(sum(id1)); % total mortality across groups
 
 %________________________________
 %

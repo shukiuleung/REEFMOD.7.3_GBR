@@ -45,7 +45,7 @@ format_extract = 'short' ; % annual outputs (every year)
 % format_extract = 'long' ; % seasonal outputs (every 6 months) (native time resolution)
 
 % Set the name for the output file. Will add suffix 's' for 'short' or 'l' for 'long'
-OutputName = 'R0_GBR.7.3'; options = [1 1 1 1 0 1 0.3 0]; % see list of options below
+OutputName = 'AdaptiveControl'; options = [1 1 1 1 0 1 0.3 0]; % see list of options below
 
 %% select the Global Circulation Model for climate change projection (CMIP-6)
 GCM = 1; % 1=CNRM-ESM2-1, 2=EC-Earth3-Veg, 3=IPSL-CM6A-LR, 4=MRI-ESM2-0, 5=UKESM1-0-LL, ...

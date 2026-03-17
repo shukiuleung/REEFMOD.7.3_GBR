@@ -97,6 +97,9 @@ RECORD.bleaching_mortality = zeros(META.nb_reefs, META.nb_time_steps, META.nb_co
 RECORD.hurricane_events = uint8(zeros(META.nb_reefs, META.nb_time_steps)) ;
 RECORD.hurricane_parm_k = zeros(META.nb_reefs, META.nb_time_steps, 'single');
 
+% Suki March 2026 record GBRMPA bleaching category
+RECORD.bleaching_category = zeros(META.nb_reefs, META.nb_time_steps,'single') ;
+
 if META.doing_restoration == 1
     RECORD.total_outplanted = zeros(META.nb_reefs, META.nb_time_steps, META.nb_coral_types) ;
     RECORD.outplanted_reefs = uint16(zeros(META.nb_reefs, META.nb_time_steps+1)) ;
@@ -826,16 +829,78 @@ t
                 if RECORD.hurricane_events(n,t) == 0 || META.allow_cyclone_cooling(t) == 0
 
                     % 10/2023 -> now using f_bleaching_new3
-                    [metapop(n).coral, metapop(n).genes, metapop(n).algal, total_coral_loss_bleaching, total_mortality_bleaching] = ...
+                    [metapop(n).coral, metapop(n).genes, metapop(n).algal, total_coral_loss_bleaching, mortality_bleaching, total_mortality_bleaching] = ...
                         f_bleaching_new3(metapop(n).coral, metapop(n).genes, metapop(n).algal, bleaching_mortalities(n,t),...
                         CORAL, META.doing_3D, META.nb_coral_types, META.doing_clades, META.doing_genetics, ...
                         META.bleaching_whole_offset, META.bleaching_partial_offset,REEF(n).Topt_baseline, META.Topt2index);
 
                     % RECORD.applied_bleaching_mortality(n,t) = single(bleaching_mortalities(n,t)); % record the bleaching mortality effectively applied
-                    RECORD.bleaching_mortality(n,t,:) = single(total_mortality_bleaching); % March 2026: now record realised mortality per species
+                    RECORD.bleaching_mortality(n,t,:) = single(mortality_bleaching); % March 2026: now record realised mortality per species
                     RECORD.coral_pct2D_lost_bleaching(n,t,:) = 100*total_coral_loss_bleaching/sum(REEF(n).substrate_SA_cm2);
                 end
             end
+
+            % Suki March 2026: Record GBRMPA defined bleaching category
+
+            % Define exposure category based on DHW value
+            if RECORD.applied_DHWs(n,t) <= 4
+                exposure_cat = 1;
+            elseif RECORD.applied_DHWs(n,t) <= 8
+                exposure_cat = 2;
+            elseif RECORD.applied_DHWs(n,t) <= 12
+                exposure_cat = 3;
+            elseif RECORD.applied_DHWs(n,t) <= 16
+                exposure_cat = 4;
+            else
+                exposure_cat = 5;
+            end
+
+            % Define colony category based on proportion of coral groups with mortality
+            mortality_vector = squeeze(RECORD.bleaching_mortality(n,t,:));
+            available_groups = sum(~isnan(mortality_vector));  % count non-NaN values
+            mortality_groups = sum(mortality_vector > 0.2);  % count groups with mortality > 0
+
+            if available_groups > 0
+                proportion_mortality = mortality_groups / available_groups;
+
+                if proportion_mortality <= 0.2
+                colony_cat = 1;
+                elseif proportion_mortality <= 0.4
+                colony_cat = 2;
+                elseif proportion_mortality <= 0.6
+                colony_cat = 3;
+                elseif proportion_mortality <= 0.8
+                colony_cat = 4;
+                else  % > 0.8
+                colony_cat = 5;
+                end
+
+            else
+                colony_cat = NaN;  % if no groups available, no mortality
+
+            end
+
+            % Define prevalence category based on total coral cover lost due to bleaching
+            % bleached = absolute coral cover loss to bleaching / original coral cover
+            bleached_cover = 100*sum(RECORD.coral_pct2D_lost_bleaching(n,t,:))/(sum(RESULT.coral_pct2D(1,1,:))+ sum(RECORD.coral_pct2D_lost_bleaching(n,t,:)));
+            
+            if bleached_cover <= 30
+                prevalence_cat = 1;
+            elseif bleached_cover  <= 60
+                prevalence_cat = 2;
+            elseif bleached_cover  <= 90
+                if total_mortality_bleaching <= 0.25
+                prevalence_cat = 3;
+                else
+                prevalence_cat = 4;
+                end
+            else  
+                prevalence_cat = 5;
+            end
+
+            RECORD.bleaching_category(n,t) = round((exposure_cat + colony_cat + prevalence_cat)/3);
+
+
         end
 
         %%%% --------------------------------------------------------------

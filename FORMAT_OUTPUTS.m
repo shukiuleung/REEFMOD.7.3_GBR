@@ -65,6 +65,7 @@ coral_mortality_bleaching = coral_cover_lost_bleaching;
 % 3) Stress records
 record_applied_cyclones = zeros(NB_SIMULATIONS, META.nb_reefs, TIME,'uint8');
 record_applied_DHWs = zeros(NB_SIMULATIONS, META.nb_reefs, TIME,'single');
+record_bleaching_category = zeros(NB_SIMULATIONS, META.nb_reefs, TIME,'single');
 
 % 4) Connectivity sequence records (NOW IN META.connectivity for a single run but need to be collected for all runs)
 % Note index values were generated every time steps, yet spawning only happens in summer, so selection starts with the first value then every 2 values
@@ -167,9 +168,12 @@ for simul = 1:NB_SIMULATIONS
     % 3) Stress records
     tmp_record_applied_cyclones = squeeze(OUTPUTS(simul).RECORD.hurricane_events);
     tmp_record_applied_DHWs = squeeze(OUTPUTS(simul).RECORD.applied_DHWs);
+    % Suki March 2026 add GBRMPA bleaching categories
+    tmp_record_bleaching_category = squeeze(OUTPUTS(simul).RECORD.bleaching_category);
 
     record_applied_cyclones(simul,:,:) = tmp_record_applied_cyclones(:,1:(scale+1):end);
     record_applied_DHWs(simul,:,:) = tmp_record_applied_DHWs(:,1:(scale+1):end);
+    record_bleaching_category(simul,:,:) = tmp_record_bleaching_category(:,1:(scale+1):end);
 
    % 4) Connectivity sequence records  
     record_spawning_chronology_CORAL(simul,:) =  cell2mat(OUTPUTS(simul).RECORD.spawning_chronology_CORAL(2,1:(scale+1):end));
