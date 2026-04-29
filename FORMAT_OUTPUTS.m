@@ -242,6 +242,7 @@ for simul = 1:NB_SIMULATIONS
         if NB_TIME_STEPS > META.COTS_control_start
 
             record_COTS_control(simul).control_records = OUTPUTS(simul).RECORD.control_records;
+            % regional_effort_allocation is stored per timestep in record_COTS_control(simul).control_records(t).regional_effort_allocation
             % New way of storing control records, for each simulation (separetely) at each time step (separetely), including:
             % - culled_reef_ID: list of reef ID that were culled (the last reef ID may have been partially culled)
             % - culled_density: total density (per 400 m2) of CoTS adults killed per culled reef

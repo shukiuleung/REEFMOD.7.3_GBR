@@ -98,7 +98,8 @@ RECORD.hurricane_events = uint8(zeros(META.nb_reefs, META.nb_time_steps)) ;
 RECORD.hurricane_parm_k = zeros(META.nb_reefs, META.nb_time_steps, 'single');
 
 % Suki March 2026 record GBRMPA bleaching category
-RECORD.bleaching_category = zeros(META.nb_reefs, META.nb_time_steps,'single') ;
+RECORD.bleaching_category = zeros(META.nb_reefs, META.nb_time_steps,'single') ; % based on exposure (DHW only). Categories are 1:5.
+RECORD.severely_bleached = zeros(META.nb_reefs, META.nb_time_steps,'single') ; % Is the reef severely bleached (>=60% fully bleached cover)
 
 if META.doing_restoration == 1
     RECORD.total_outplanted = zeros(META.nb_reefs, META.nb_time_steps, META.nb_coral_types) ;
@@ -855,51 +856,64 @@ t
                 exposure_cat = 5;
             end
 
-            % Define colony category based on proportion of coral groups with mortality
-            mortality_vector = squeeze(RECORD.bleaching_mortality(n,t,:));
-            available_groups = sum(~isnan(mortality_vector));  % count non-NaN values
-            mortality_groups = sum(mortality_vector > 0.2);  % count groups with mortality > 0
+            % % Define colony category based on proportion of coral groups with mortality
+            % mortality_vector = squeeze(RECORD.bleaching_mortality(n,t,:));
+            % available_groups = sum(~isnan(mortality_vector));  % count non-NaN values
+            % mortality_groups = sum(mortality_vector > 0.2);  % count groups with mortality > 0
+            % 
+            % if available_groups > 0
+            %     proportion_mortality = mortality_groups / available_groups;
+            % 
+            %     if proportion_mortality <= 0.2
+            %     colony_cat = 1;
+            %     elseif proportion_mortality <= 0.4
+            %     colony_cat = 2;
+            %     elseif proportion_mortality <= 0.6
+            %     colony_cat = 3;
+            %     elseif proportion_mortality <= 0.8
+            %     colony_cat = 4;
+            %     else  % > 0.8
+            %     colony_cat = 5;
+            %     end
+            % 
+            % else
+            %     colony_cat = NaN;  % if no groups available, no mortality
+            % 
+            % end
+            % 
+            % % Define prevalence category based on total coral cover lost due to bleaching
+            %
+            % bleached_cover = 100*sum(RECORD.coral_pct2D_lost_bleaching(n,t,:))/(sum(RESULT.coral_pct2D(1,1,:))+ sum(RECORD.coral_pct2D_lost_bleaching(n,t,:)));
+            
+            % if bleached_cover <= 30
+            %     prevalence_cat = 1;
+            % elseif bleached_cover  <= 60
+            %     prevalence_cat = 2;
+            % elseif bleached_cover  <= 90
+            %     if total_mortality_bleaching <= 0.25
+            %     prevalence_cat = 3;
+            %     else
+            %     prevalence_cat = 4;
+            %     end
+            % else  
+            %     prevalence_cat = 5;
+            % end
 
-            if available_groups > 0
-                proportion_mortality = mortality_groups / available_groups;
-
-                if proportion_mortality <= 0.2
-                colony_cat = 1;
-                elseif proportion_mortality <= 0.4
-                colony_cat = 2;
-                elseif proportion_mortality <= 0.6
-                colony_cat = 3;
-                elseif proportion_mortality <= 0.8
-                colony_cat = 4;
-                else  % > 0.8
-                colony_cat = 5;
-                end
-
-            else
-                colony_cat = NaN;  % if no groups available, no mortality
-
-            end
-
-            % Define prevalence category based on total coral cover lost due to bleaching
+            
+            % AIMS definition of severe bleaching intensity = > 60% fully bleached cover: https://www.aims.gov.au/research-topics/environmental-issues/coral-bleaching/coral-bleaching-events
             % bleached = absolute coral cover loss to bleaching / original coral cover
+            % coral_pct2D_lost_bleaching includes whole colony and partial mortality = difference between pre- and post-bleaching cover 
             bleached_cover = 100*sum(RECORD.coral_pct2D_lost_bleaching(n,t,:))/(sum(RESULT.coral_pct2D(1,1,:))+ sum(RECORD.coral_pct2D_lost_bleaching(n,t,:)));
             
-            if bleached_cover <= 30
-                prevalence_cat = 1;
-            elseif bleached_cover  <= 60
-                prevalence_cat = 2;
-            elseif bleached_cover  <= 90
-                if total_mortality_bleaching <= 0.25
-                prevalence_cat = 3;
-                else
-                prevalence_cat = 4;
-                end
-            else  
-                prevalence_cat = 5;
+            if bleached_cover > 60  
+                severely_bleached = 1;
+            else
+                severely_bleached = 0;
             end
 
-            RECORD.bleaching_category(n,t) = round((exposure_cat + colony_cat + prevalence_cat)/3);
-
+            RECORD.bleaching_category(n,t) = exposure_cat;
+            RECORD.severely_bleached(n,t) = severely_bleached;
+            % RECORD.bleaching_category(n,t) = round((exposure_cat + colony_cat + prevalence_cat)/3);
 
         end
 
@@ -1454,14 +1468,58 @@ t
 
         if t >= META.COTS_control_start
 
+            % Suki April 2026: Update CoTS culling strategy based on schedule (if defined in settings)
+            if ~isempty(META.COTS_strat_schedule)
+                active_rows = META.COTS_strat_schedule(META.COTS_strat_schedule(:,1) <= t, :);
+                if ~isempty(active_rows)
+                    META.COTS_reefs2cull_strat = active_rows(end, 2);
+                end
+            end
+
             % [ RESULT ] = f_COTS_control_CSIRO( META, RESULT, t, [], []); % REEF_POP and CONNECT as missing inputs (not currently used)
             % [ RESULT, RECORD.control_records(t) ] = f_COTS_control_NEW( META, RESULT, t);
+
+            % Suki April 2026 - predicted CoTS densities before control informs
+            % regional effort allocation (dynamic)
+            % recompute META.regional_effort_allocation
+            if META.effort_alloc_method == 1 && META.use_regional_dives == 1
+                cots_density_now = squeeze(sum(RESULT.COTS_all_densities(:, t+1, :), 3)); % total density per reef (summed across age classes)
+                [G, region_names] = findgroups(META.COTS_cull_reeflist.Region);
+                region_density = splitapply(@sum, cots_density_now, G);
+                region_order_dyn = categorical({'FN'; 'N'; 'C'; 'S'});
+                region_density_ordered = zeros(4,1);
+                for ri = 1:4
+                    idx = region_names == region_order_dyn(ri);
+                    if any(idx)
+                        region_density_ordered(ri) = region_density(idx);
+                    end
+                end
+
+                % weight effort by current capacity (Reef Authority)
+                region_density_ordered = region_density_ordered .* [0.1; 0.5; 0.2; 0.2];
+
+                total_density = sum(region_density_ordered);
+                if total_density > 0
+                    META.regional_effort_allocation = (region_density_ordered ./ total_density)';
+                else
+                    META.regional_effort_allocation = [0.1; 0.5; 0.2; 0.2]; % use fixed capacity weight if no CoTS present (can't div by 0)
+                end
+            end
 
             total_coral_pct2D = sum(squeeze(RESULT.coral_pct2D(:, t+1, :)), 2); % total coral cover for reef prioritisation
             COTS_larval_output = sum(RESULT.COTS_larval_output(:, t-1:t),2); % number of CoTS larvae produced (over 2 time steps) to prioritise larval source
             
+            % Suki March 2026: Pass previous control_records; use empty struct if first timestep of control
+            if t > META.COTS_control_start
+                control_records_prev = RECORD.control_records(t-1);
+            else
+                control_records_prev = struct([]);
+            end
+            
             [ RESULT.COTS_all_densities(:,t+1,:), RECORD.control_records(t), RECORD.last_reef_COTScontrolled(t) ] = ...
-                f_COTS_control_NEW(META, RESULT.COTS_all_densities(:, t+1, :), RECORD.last_reef_COTScontrolled(t-1), total_coral_pct2D, COTS_larval_output, RECORD.applied_DHWs(:,t));
+                f_COTS_control_NEW(META, RESULT.COTS_all_densities(:, t+1, :), RECORD.last_reef_COTScontrolled(t-1), total_coral_pct2D, COTS_larval_output, CONNECT_CORAL, t,...
+                RECORD.applied_DHWs(:,t), RECORD.bleaching_category(:,t), RECORD.severely_bleached(:,t), control_records_prev);
+            RECORD.control_records(t).regional_effort_allocation = META.regional_effort_allocation; % [FN N C S] - for tracking and debugging
 
         end
     end

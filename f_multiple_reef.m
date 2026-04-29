@@ -16,9 +16,9 @@ load('GBR_REEF_POLYGONS_2024.mat') % with updated estimates of ungrazable substr
 % and corrected assignment of shelf position (Caro) and zoning status (Tina).
 
 %% Reef selection
-META.reef_ID = [1:3806]'; % Entire GBR
+META.reef_ID = [680:700]'; % Entire GBR
 % META.reef_ID = GBR_REEFS.Reef_ID(GBR_REEFS.LAT<-16.78 & GBR_REEFS.LAT >-17.12 & GBR_REEFS.LON >146.05); % Region around Moore Reef (24 reefs)
-% META.reef_ID = GBR_REEFS.Reef_ID(GBR_REEFS.LAT<-15.76 & GBR_REEFS.LAT >-17.34); % Cairns region reduced (190 reefs) for restoration
+% META.reef_ID = GBR_REEFS.Reef_ID(GBR_REEFS.sLAT<-15.76 & GBR_REEFS.LAT >-17.34); % Cairns region reduced (190 reefs) for restoration
 
 META.nb_reefs = length(META.reef_ID);
 META.reef_lat = GBR_REEFS.LAT(META.reef_ID); % required for CoTS control

@@ -30,14 +30,14 @@ clear
 
 SaveDir ='';
 
-NB_SIMULATIONS = 20; % Number of repeated runs
+NB_SIMULATIONS = 1; % Number of repeated runs
 
 % NB_TIME_STEPS has to be an even number. 
 % Always run the hindcast before future projections (initialisation = winter 2007)
 % Example: 32 (hindcast 2008-2023) + 154 (forecast 2024-2100)
 
 % Historic cyclones and DHW currently available until 2024 (inclusive). 
-NB_TIME_STEPS = 34; % HINDCAST: summer 2008 to winter 2024 (34 steps)
+NB_TIME_STEPS = 34+52; % HINDCAST: summer 2008 to winter 2024 (34 steps)
 % NB_TIME_STEPS = 34+152; % HINDCAST+FORECAST summer 2008 - winter 2100
 
 % Set the format for output extraction and saving
@@ -45,7 +45,7 @@ format_extract = 'short' ; % annual outputs (every year)
 % format_extract = 'long' ; % seasonal outputs (every 6 months) (native time resolution)
 
 % Set the name for the output file. Will add suffix 's' for 'short' or 'l' for 'long'
-OutputName = 'AdaptiveControl'; options = [1 1 1 1 0 1 0.3 0]; % see list of options below
+OutputName = 'testing_dynamic'; options = [1 1 1 1 0 1 0.3 0]; % see list of options below
 
 %% select the Global Circulation Model for climate change projection (CMIP-6)
 GCM = 1; % 1=CNRM-ESM2-1, 2=EC-Earth3-Veg, 3=IPSL-CM6A-LR, 4=MRI-ESM2-0, 5=UKESM1-0-LL, ...

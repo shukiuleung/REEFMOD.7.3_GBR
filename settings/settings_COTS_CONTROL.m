@@ -1,14 +1,14 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Tina Skinner, MSEL, June 2023.
 %
+% Last edited: Suki Leung, MSEL, March 2026
 % Parametrisation of COTS control settings.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 META.COTS_reef_trigger = 0; % whether (1) or not (0) the trigger of control is reef-level CoTS above threshold of 0.22 CoTS per tow
 % If set to 0, the trigger is CoTS density per site, not per reef. The alternative (1) hasn't been tested yet.
 
-META.COTS_control_start = 23; % timestep in 6-month intervals when control should start = 23 (summer 2019)
-
+META.COTS_control_start = 23; % timestep in 6-month intervals when control should start = 23 (summer 2019), 
 %%% CHOOSING REEFS TO CONTROL  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % YM 07/25: now defining the region where CoTS control is deployed (region names to match 'New_regions_TS.mat').
 % With 4 regions, a total of 15 geographic domains can be defined, including the previous stategies #1 (GBR-wide) to #8 (only South). 
@@ -29,17 +29,7 @@ if META.doing_COTS_heat_stress_detectibility == 1
 end
 
 % ========================================================================
-% Suki: load perimeter for estimating manta tow effort (expressed in hours)
-load("perimeter.mat")
-META.perimeter = GBR_REEFS_PERIMETER.PERIMETER; % reef perimeter (metres) calculated using reef polygons in ArcGIS (geodesic)
-META.manta_time = GBR_REEFS_PERIMETER.manta_time; % assuming manta towing 200m per min. perimeter/100/60 = hours it takes to manta tow the entire reef perimeter
-
-% Load distance of reefs from port (to sort reef visitation order)
-% load("distance_port.mat") %need input from Reef Authority
-META.distance_port = zeros(3806,2);
-META.distance_port(:,1) = rand(3806,1); % distance randomise for now
-META.distance_port(:,2) = randi([1,5],3806,1); % port ID randomise for now
-
+% Suki Feb 2026
 % Create pair-wise reef distance matrix 
 reef_coords = [GBR_REEFS.LON, GBR_REEFS.LAT];
 % Preallocate distance matrix
@@ -72,6 +62,13 @@ META.COTS_reefs2cull_strat = 1;
 % 18 - CoTS connec and coral cover, same as case 16 and 17 above, but no preferential weighting to blue or green zones.
 % 19 - Adpative Control during bleaching = default (WIP)
 
+% Suki April 2026 WIP - dynamic strategy schedule. This allows switching between strategies at different time points in the simulation, which could be used to simulate adaptive management (e.g. start with strategy 1, then switch to strategy 19 when bleaching starts).
+% Strategy schedule: Nx2 matrix [t_start, strategy], rows in ascending order of t_start.
+% Each row activates 'strategy' from timestep t_start onwards, overriding META.COTS_reefs2cull_strat.
+% Leave empty ([]) to use META.COTS_reefs2cull_strat for all timesteps.
+% Example: run strat 1 from control start, then switch to strat 19 from t=35 onwards:
+% META.COTS_strat_schedule = [META.COTS_control_start, 1; 35, 19];
+META.COTS_strat_schedule = [];
 
 % Updates from Tina (July 2023) - now have fixed target reef list. Control at T, then P, then N.
 load('New_regions_TS.mat') %this has been updated for new GBRMPA 2023 PR list and includes target reefs now
@@ -103,10 +100,59 @@ META.COTS_cull_reeflist_targetRUN = target(randperm(size(target,1)),:); %Randoml
 META.COTS_cull_reeflist_priorityRUN = priority(randperm(size(priority,1)),:); %Randomly shuffle the PR list
 META.COTS_cull_reeflist_nonpriorityRUN = nonpriority(randperm(size(nonpriority,1)),:); %Randomly shuffle the NPR list
 
+%% Thermal refugia/hotspot status for each reef and GCM which may determine control priority - Tina Jan 2026
+load('refugia_lookup.mat');
+
+% Filter lookup table for this GCM and SSP, and refugia = 1
+is_refugia = refugia_lookup.GCM == OPTIONS.GCM & refugia_lookup.SSP == OPTIONS.SSP & refugia_lookup.refugia == 1;
+
+% Set the reefs that are thermal refugia for this scenario
+META.refugia = refugia_lookup.ReefID(is_refugia);
+
+% Filter lookup table for this GCM and SSP, and hotspot = 1
+is_hotspot = refugia_lookup.GCM == OPTIONS.GCM & refugia_lookup.SSP == OPTIONS.SSP & refugia_lookup.hotspot == 1;
+
+% Set the reefs that are hotspots for this scenario
+META.hotspot = refugia_lookup.ReefID(is_hotspot);
+
+%% CoTS risk rank (coral cover lost to CoTS from counterfactual across six climate futures) for each reef to determine control priority - Tina Jan 2026
+load('CoTSriskrank_lookup.mat');
+
+% Filter for the current GCM and SSP
+is_current = CoTSriskrank.GCM == OPTIONS.GCM & CoTSriskrank.SSP == OPTIONS.SSP;
+
+% Extract the reef IDs and their ranks for this scenario
+META.cots_risk_rank = CoTSriskrank.CoTSRiskRank(is_current);
+
+%% Key source reef (KSR) reef sizes (if running scenarios 25-30 and using KSR ranking then need reef sizes) - Tina Feb 2026
+load('KSR_reefsizes.mat');
+
+% Set the CoTS risk ranking of all reefs 
+META.KSR_reefsizes = KSR_reefsizes;
+
+%% CoTS benefits 2025 - 2075. Suki March 2026. reef_coral_cover_deltas provided by Tina (see also Skinner et al. 2025)
+META.cots_benefits = readtable('reef_coral_cover_deltas.csv');
+META.cots_benefits.t = 23 + 2 * (META.cots_benefits.Year - 2019); % convert year to timestep
+META.cots_benefits.SSP = extractAfter(META.cots_benefits.SSP, 3);
+
+% Filter for the current GCM and SSP
+is_current = META.cots_benefits.GCM == OPTIONS.GCM & META.cots_benefits.SSP == OPTIONS.SSP;
+
+% Extract the reef IDs and their reef coral cover deltas for this scenario
+META.cots_benefits = META.cots_benefits(is_current, :);
+
 %% Prioritisation options
 META.COTS_cull_fixed_reeflist = 0; % Specifies whether boat order for reef visitation is fixed (1) or randomised (0) at every time step
 META.min_control_cover = 20; % minimum coral cover needed for control to still happen when high COTS in f_make_ReefList_TS
 META.max_COTS = 3; % Specifies max COTS per tow above which control wouldn't happen as too many.
+
+
+%% Workable reefs within GBRMP
+META.workable = readtable('GBR_REEFS_GBRMP_Workable_SL.csv');
+
+%% Nearest port distances between adjacent regions (for inter-port travel cost when redistributing effort)
+% Columns: IN_REGION, NEAR_REGION, IN_FID, NEAR_FID, NEAR_DIST_KM (regions: 1=FN, 2=N, 3=C, 4=S)
+META.port_distances = readtable('nearest_ports.csv');
 
 %% TEMP FOR DEBUGGING
 % META.COTS_fixed_list = 1; % required for each boat (consider deleting, might be redundant with META.COTS_cull_fixed_reeflist)
@@ -159,6 +205,55 @@ end
 META.max_dives_per_site = 300; %For high effort reefs, specify stopping rule threshold number of dives at cull site level - for hours convert * (40/60) = 200 hours
 
 META.max_dives_per_reef = 3000; % For high effort reefs, specify stopping rule threshold number of dives at reef level - for hours convert * (40/60) = 2000 hours
+
+% Suki April 2026 WIP - dynamic (now static) effort allocation across region.
+% Compute regional effort allocation proportional to mean CoTS loss area (counterfactual 2025-2075) per region.
+% Regions: 1=Far Northern (FN), 2=Cairns/Cooktown (N), 3=Townsville/Whitsunday (C), 4=Mackay/Capricorn (S)
+% Reefs with AREA_DESCR == 'out' (outside Marine Park) are excluded from this calculation.
+cots_risk_current = CoTSriskrank(CoTSriskrank.GCM == OPTIONS.GCM & CoTSriskrank.SSP == OPTIONS.SSP, :);
+
+% Match cots_risk_current.ReefID to GBR_REEFS.REEF_ID to get the positional index in GBR_REEFS
+[~, gbr_idx] = ismember(cots_risk_current.ReefID, GBR_REEFS.Reef_ID);
+% Keep only reefs that are part of this simulation (META.reef_ID)
+in_sim = ismember(gbr_idx, META.reef_ID);
+% Look up AREA_DESCR and loss values for simulated reefs only
+sim_area_descr = GBR_REEFS.AREA_DESCR(gbr_idx(in_sim));
+sim_loss = cots_risk_current.mean_COTS_loss_area(in_sim);
+
+% group by regions avaialble in the simulation and sum the loss
+[G, region_names] = findgroups(sim_area_descr);
+region_loss = splitapply(@sum, sim_loss, G);
+
+region_order = categorical({ ...
+    'Far Northern', ...
+    'Cairns/Cooktown', ...
+    'Townsville/Whitsunday', ...
+    'Mackay/Capricorn'});
+
+region_loss_ordered = zeros(4,1);
+
+for i = 1:4
+    idx = region_names == region_order(i);
+    if any(idx)
+        region_loss_ordered(i) = region_loss(idx);
+    end
+end
+
+% Adjust weighting based on current capacity (Reef Authority)
+region_loss_ordered = region_loss_ordered .* [0.1; 0.5; 0.2; 0.2];
+
+META.regional_effort_allocation = (region_loss_ordered ./ sum(region_loss_ordered))'; % proportion of total CoTS risk per region [FN, N, C, S]
+% when aggregated across time = [0.338 0.242 0.163 0.257]
+% According to Dave, N region currently holds ~50% of total capacity
+% (highest among regions) - which isn't reflective of CoTS risk.
+
+% Toggle for effort allocation method:
+%   0 = static  - proportional to mean CoTS loss area (counterfactual, computed above)
+%   1 = dynamic - recomputed every timestep in f_runmodel from current CoTS densities
+META.effort_alloc_method = 1;
+
+META.use_regional_dives = 1;   % 1 = enforce per-region dive budgets (new); 0 = global budget only, original behaviour
+META.use_site_skip_find = 1;   % 1 = skip expensive sites and try cheaper ones on same reef (new); 0 = break site loop on first budget hit, original behaviour
 
 %%% NOT IMPLEMENTED YET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
