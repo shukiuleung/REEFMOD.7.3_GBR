@@ -251,9 +251,9 @@ bonus_zoning  = 0.1;  % easy to tune
 switch scenario
     case 1   % default
         score = culled_rank_n * w_cull_record + manta_tow_rank_n * w_manta_record + reef_priority_rank * w_priority + bleaching_category_rank * w_bleaching_category + distance_rank_n * w_distance;
-    case 2   % perfect knowledge a
+    case 2   % perfect knowledge a - case 27 in f_makeReefList_NEW
         score = cots_risk_rank_n * w_cots_risk + cots_per_tow_rank_n * w_predicted_manta + reef_priority_rank * w_priority + bleaching_category_rank * w_bleaching_category + distance_rank_n * w_distance;
-    case 3   % perfect knowledge b
+    case 3   % perfect knowledge b - case 28 in f_makeReefList_NEW
         score = cots_benefits_rank_n * w_cots_benefits + cots_per_tow_rank_n * w_predicted_manta + reef_priority_rank * w_priority + bleaching_category_rank * w_bleaching_category + distance_rank_n * w_distance;
     case 4   % refugia + BZ
         w_cots_risk = 0.5;

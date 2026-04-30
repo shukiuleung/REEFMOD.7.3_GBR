@@ -1468,7 +1468,8 @@ t
 
         if t >= META.COTS_control_start
 
-            % Suki April 2026: Update CoTS culling strategy based on schedule (if defined in settings)
+            % Suki April 2026: Update CoTS culling strategy based on
+            % schedule (if defined in settings) - WIP
             if ~isempty(META.COTS_strat_schedule)
                 active_rows = META.COTS_strat_schedule(META.COTS_strat_schedule(:,1) <= t, :);
                 if ~isempty(active_rows)

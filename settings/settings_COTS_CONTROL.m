@@ -48,7 +48,7 @@ end
 % ========================================================================
 
 % Choose culling strategy (detail in f_makeReefList_NEW)
-META.COTS_reefs2cull_strat = 1;
+META.COTS_reefs2cull_strat = 28;
 % 1 - GBRMPA strategy that goes to Target reefs first, then Priority reefs, then Non Priority reefs
 % 9 - Outbreak front (latitude): GBRMPA strategy that goes to Target reefs first, then also goes to 0.5° lat (~50 km) from target reefs with outbreaks - whole GBR.
 % 10 - Outbreak front (sector): look for the AIMS sector (1-11) that has the highest density of COTS on ALL reefs, start control there, then remaining.
@@ -60,7 +60,18 @@ META.COTS_reefs2cull_strat = 1;
 % 16 - GreenZone weighting with CoTS connectivity and coral cover.
 % 17 - BlueZone weighting with CoTS connectivity and coral cover.
 % 18 - CoTS connec and coral cover, same as case 16 and 17 above, but no preferential weighting to blue or green zones.
-% 19 - Adpative Control during bleaching = default (WIP)
+% 19 - Control maximise benefits (WIP)
+% 20 - Adaptive Control: default (cat 1 cull, cat 2 +monitor, cat 3 +culling, cat 4 relocate 250km, cat 5 relocate 1000km)
+% 21 - Adaptive Control shifted +1 cat (cat 1-2 cull, cat 3 +monitor, cat 4 +culling, cat 5 relocate 1000km)
+% 22 - Adaptive Control shifted -1 cat (cat 1 +monitor, cat 2 +culling, cat 3-4 relocate 250km, cat 5 relocate 1000km)
+% 23 - Adaptive Control with alternative regional bleaching threshold: skip region when >=60% of reefs are severely bleached
+% 24 - Adaptive Control with alternative regional bleaching threshold: skip region when >=30% of reefs are severely bleached
+% 25 - Adaptive Control with alternative regional bleaching decisions: expand effort to NP reefs when at least 3 regions are skip (>=3 unworkable -> no redistribution).
+% 26 - Adaptive Control with alternative regional bleaching decisions: always expand to NP reefs (never redistribute, regardless of how many regions are skip).
+% 27 - Adaptive Control with alternative knowledge level: perfect knowledge a - score based on CoTS risk (density) + predicted manta tow density
+% 28 - Adaptive Control with alternative knowledge level: perfect knowledge b - score based on CoTS benefits (culled density) + predicted manta tow density
+% 29 - Adaptive Control and maximise benefits  (WIP)
+
 
 % Suki April 2026 WIP - dynamic strategy schedule. This allows switching between strategies at different time points in the simulation, which could be used to simulate adaptive management (e.g. start with strategy 1, then switch to strategy 19 when bleaching starts).
 % Strategy schedule: Nx2 matrix [t_start, strategy], rows in ascending order of t_start.

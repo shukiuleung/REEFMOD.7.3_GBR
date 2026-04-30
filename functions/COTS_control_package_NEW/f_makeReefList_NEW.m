@@ -214,9 +214,32 @@ switch META.COTS_reefs2cull_strat
         % Combine all lists - this preserves the order priority > nonpriority while re-ordering for zoning within each
         full_list_ID = vertcat(priority_list_tmp2, priority_list_tmp1(~ismember(priority_list_tmp1, priority_list_tmp2)),...
             nonpriority_list_tmp2, nonpriority_list_tmp1(~ismember(nonpriority_list_tmp1, nonpriority_list_tmp2))); % New list
+    case 19 % control - maximise benefits from Tina's NESP results - WIP
+         full_list_ID = vertcat(target_ID, priority_ID);
 
-    case 19 % Suki March 2026: Default GBRMPA daptive control scenario 
-    
+    case { 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 } % Suki March 2026: Adaptive control scenarios and alternatives
+        % 20 = default adaptive scenario (cat 1 cull, cat 2 +monitor, cat 3 +culling, cat 4 relocate 250km, cat 5 relocate 1000km)
+        % 21 = shifted +1 cat (cat 1-2 cull, cat 3 +monitor, cat 4 +culling, cat 5 relocate 1000km)
+        % 22 = shifted -1 cat (cat 1 +monitor, cat 2 +culling, cat 3-4 relocate 250km, cat 5 relocate 1000km)
+        % 23 = alternative regional bleaching threshold: skip region when >=60% of reefs are severely bleached
+        % 24 = alternative regional bleaching threshold: skip region when >=30% of reefs are severely bleached
+        % 25 = alternative remaining workable region threshold: expand effort to non-priority reefs even if there is 1 available workable region (i.e., all_skip requires 4 regions all to be skipped, here we require only 3 regions. if there are at least 3 skip regions). e.g., FN, C, and S are skip regions, in these regions, we expand effort to cull non-priority reefs even though N is workable.
+        % 26 = alternative remaining workable region threshold: do not redistribute effort to closest workable region, always expand effort. effort always stay in same region with no travelling.
+        % 27 = alternative knowledge level: CoTS risk + predicted manta
+        % 28 = alternative knowledge level: CoTS benefits + predicted manta
+        % 29 = adaptive - Maximise benefits
+
+        % Case-specific bleaching thresholds for reef-level decisions (cases 21 and 22 shift the default case-20 thresholds by +/-1 category)
+        % Cases 23 and 24 use the same reef-level thresholds as case 20 but change the regional bleaching threshold.
+        switch META.COTS_reefs2cull_strat
+            case 20; cull_threshold = 3; cand_threshold = 3; radius_by_cat = [0 0 0 250 1000]; regional_threshold = 0.9; % cat 4->250km, cat 5->1000km; skip region when >=90% severely bleached
+            case 21; cull_threshold = 4; cand_threshold = 4; radius_by_cat = [0 0 0 0 1000];   regional_threshold = 0.9; % cat 5->1000km only
+            case 22; cull_threshold = 2; cand_threshold = 2; radius_by_cat = [0 0 250 250 1000]; regional_threshold = 0.9; % cat 3-4->250km, cat 5->1000km
+            case 23; cull_threshold = 3; cand_threshold = 3; radius_by_cat = [0 0 0 250 1000]; regional_threshold = 0.6; % same as case 20 but skip region when >=60% severely bleached
+            case 24; cull_threshold = 3; cand_threshold = 3; radius_by_cat = [0 0 0 250 1000]; regional_threshold = 0.3; % same as case 20 but skip region when >=30% severely bleached
+            otherwise; cull_threshold = 3; cand_threshold = 3; radius_by_cat = [0 0 0 250 1000]; regional_threshold = 0.9; % default for cases 25-29, same as case 20
+        end
+
         % Filter all reef lists to workable reefs only: within GBRMP, within 250 km of port, and shallow
         workable_reefIDs = META.workable.ReefID(META.workable.GBRMP == 1 & META.workable.Within250kmOfPort == 1 & META.workable.Shallow == 1);
 
@@ -225,8 +248,10 @@ switch META.COTS_reefs2cull_strat
         % default: only select the 500 priority reefs
 
         % if doing maximise benefit scenarios - sort reef list first
-        % case 20
-        % priority_list_tmp0 = f_scoring(META, CONNECT_CORAL, t, total_coral_pct2D, priority_list_tmp0, control_records_prev, current_COTS_per_tow, 4, 0); % refugia + BZ
+        %switch
+        %    case 29
+        %        priority_list_tmp0 = f_scoring(META, CONNECT_CORAL, t, total_coral_pct2D, priority_list_tmp0, control_records_prev, current_COTS_per_tow, 4, 0); % refugia + BZ
+        %end
 
         %% Regional bleaching check point
         % Map reef IDs in reeflist to position indices, then assign bleaching info
@@ -251,8 +276,8 @@ switch META.COTS_reefs2cull_strat
             end
         end
         
-        % Identify regions with >= 0.9 proportion of severely bleached reefs
-        skip_region_idx = find(regional_bleaching >= 0.9); % numeric indices into META.COTS_cull_region
+        % Identify regions exceeding the regional bleaching threshold (proportion of severely bleached reefs)
+        skip_region_idx = find(regional_bleaching >= regional_threshold); % numeric indices into META.COTS_cull_region
         skip_region = META.COTS_cull_region(skip_region_idx); % region labels (e.g., 'FN', 'N', 'C', 'S')
 
         % Identify reefs in skip regions - they will be monitored only (not culled)
@@ -277,18 +302,12 @@ switch META.COTS_reefs2cull_strat
             end
 
             I_reef = find(META.reef_ID == priority_list_tmp1(reef)); % position index for this reef
-            if bleaching_category(I_reef) <= 3
+            if bleaching_category(I_reef) <= cull_threshold
                 priority_list_tmp2 = vertcat(priority_list_tmp2, priority_list_tmp1(reef)); % keep reef in list - further actions are set in f_COTS_control_NEW
 
             else         
-                % search for nearby reefs with bleaching category <=3 to relocate efforts
-                
-                if bleaching_category(I_reef) == 4
-                    search_radius = 250; 
-                else
-                    % further distance if bleaching category is 5 
-                    search_radius = 1000; 
-                end
+                % search for nearby reefs with lower bleaching category to relocate efforts
+                search_radius = radius_by_cat(bleaching_category(I_reef));
 
                 distances = META.distance_matrix(:, priority_list_tmp1(reef)); % extract distances between this reef and all other reef
                 reefs_within_radius = find(distances <= search_radius & distances > 0); % look for reefs within search radius that is not itself
@@ -301,7 +320,7 @@ switch META.COTS_reefs2cull_strat
                 end
 
                 [~, rwr_pos] = ismember(reefs_within_radius, META.reef_ID); % position indices for reefs within radius
-                candidates = reefs_within_radius(bleaching_category(rwr_pos) <= 3); % look for reefs within radius that have bleaching category <=3
+                candidates = reefs_within_radius(bleaching_category(rwr_pos) <= cand_threshold); % look for reefs within radius that have bleaching category <= cand_threshold
                 % Reef is only workable when it is within the GBRMP, within 250 km of a port, and shallow (shallows point of the reef <10 m depth).
                 candidates = candidates(ismember(candidates, workable_reefIDs)); % only keep candidates that are workable reefs
 
@@ -313,10 +332,10 @@ switch META.COTS_reefs2cull_strat
 
                 [~, cand_pos] = ismember(candidates, META.reef_ID); % position indices for candidates
                 if ~isempty(control_records_prev)
-                    % Filter candidates: keep bleaching_category 3 reefs only if previously culled
-                    candidates = candidates((bleaching_category(cand_pos) ~= 3) | ((bleaching_category(cand_pos) == 3) & ismember(candidates, control_records_prev.culled_reef_ID)));
+                    % Filter candidates: keep borderline-category reefs only if previously culled
+                    candidates = candidates((bleaching_category(cand_pos) ~= cand_threshold) | ((bleaching_category(cand_pos) == cand_threshold) & ismember(candidates, control_records_prev.culled_reef_ID)));
                 else
-                    candidates = candidates(bleaching_category(cand_pos) <= 2);
+                    candidates = candidates(bleaching_category(cand_pos) < cand_threshold);
                 end
                 
                 % if candidate already in the priority list, remove it from the list to avoid duplicates
@@ -334,7 +353,14 @@ switch META.COTS_reefs2cull_strat
                 % - Reef priority status (T > P > N)
                 % - bleaching category (priority to 1, then 2, then 3)
                 % - distance to the priority reef (closer is better)
-                sorted_candidates = f_scoring(META, CONNECT_CORAL, t, total_coral_pct2D, candidates, control_records_prev, current_COTS_per_tow, 1, priority_list_tmp1(reef));
+                switch META.COTS_reefs2cull_strat
+                    case 27 % score based on CoTS risk (density) + predicted manta tow density 
+                        sorted_candidates = f_scoring(META, CONNECT_CORAL, t, total_coral_pct2D, candidates, control_records_prev, current_COTS_per_tow, 2, priority_list_tmp1(reef));
+                    case 28 % score based on CoTS benefits (culled density) + predicted manta tow density
+                        sorted_candidates = f_scoring(META, CONNECT_CORAL, t, total_coral_pct2D, candidates, control_records_prev, current_COTS_per_tow, 3, priority_list_tmp1(reef));
+                    otherwise % default
+                        sorted_candidates = f_scoring(META, CONNECT_CORAL, t, total_coral_pct2D, candidates, control_records_prev, current_COTS_per_tow, 1, priority_list_tmp1(reef));
+                end
 
                 priority_list_tmp2 = vertcat(priority_list_tmp2, sorted_candidates(1)); % add highest-scored candidate reef to the list
 
@@ -349,17 +375,27 @@ switch META.COTS_reefs2cull_strat
         % Remove any skip-region priority reefs added as relocation candidates to avoid duplication
         skip_priority_reefs = skip_priority_reefs(~ismember(skip_priority_reefs, priority_list_tmp2));
 
-        % Non-priority reefs to cull: filter to bleaching category <= 3 and not already in priority list (tmp2)
+        % Non-priority reefs to cull: filter to bleaching category <= cull_threshold and not already in priority list (tmp2)
         [~, np_pos] = ismember(nonpriority_tmp0, META.reef_ID);
-        nonpriority_tmp1 = nonpriority_tmp0(bleaching_category(np_pos) <= 3 & ~ismember(nonpriority_tmp0, priority_list_tmp2));
+        nonpriority_tmp1 = nonpriority_tmp0(bleaching_category(np_pos) <= cull_threshold & ~ismember(nonpriority_tmp0, priority_list_tmp2));
 
         % Build monitor_only_IDs: skip-region priority reefs are always monitor-only.
-        % If ALL regions are skip: also include non-priority reefs with bleaching category > 3
-        % (they are surveyed but cannot be culled efficiently).
-        all_skip = length(skip_region_idx) == length(META.COTS_cull_region);
+        % If the 'expand' condition is met: also include non-priority reefs with bleaching category > 3
+        % (they are surveyed but cannot be culled efficiently), and no effort is redistributed to other regions.
+        % Case 20 (default): expand only when ALL regions are skip.
+        % Case 25: expand when at least 3 regions are skip (>=3 unworkable -> no redistribution).
+        % Case 26: always expand (never redistribute, regardless of how many regions are skip).
+        switch META.COTS_reefs2cull_strat
+            case 25
+                all_skip = length(skip_region_idx) >= 3;
+            case 26
+                all_skip = ~isempty(skip_region_idx);
+            otherwise
+                all_skip = length(skip_region_idx) == length(META.COTS_cull_region);
+        end
         monitor_only_IDs = skip_priority_reefs;
         if all_skip
-            nonpriority_cat_gt3 = nonpriority_tmp0(bleaching_category(np_pos) > 3 & ~ismember(nonpriority_tmp0, priority_list_tmp2));
+            nonpriority_cat_gt3 = nonpriority_tmp0(bleaching_category(np_pos) > cull_threshold & ~ismember(nonpriority_tmp0, priority_list_tmp2));
             monitor_only_IDs = vertcat(monitor_only_IDs, nonpriority_cat_gt3);
         end
 

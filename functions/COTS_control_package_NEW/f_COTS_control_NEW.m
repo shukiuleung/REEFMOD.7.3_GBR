@@ -71,18 +71,20 @@ control_records=struct('culled_reef_ID',[], 'culled_density_reef',[], 'culled_de
     'nb_dives',[], 'nb_culled_sites',[], 'nb_culled_reefs',[], 'nb_visited_reefs',[], ...
     'nb_control_sites' , [], 'nb_unvisited_reefs', height(unvisited), ...
     'additional_cull_ID', [], 'nb_additional_cull', 0, ...
-    'monitor_ID',[], 'monitor_dives', [], 'total_monitor_dives', 0, ...
+    'skip_region_monitor_ID', [], 'skip_region_monitor_dives', [], ...
+    'additional_monitor_ID', [], 'additional_monitor_dives', [], ...
+    'total_monitor_dives', 0, ...
     'nb_monitored_reefs', 0, 'remaining_dives', 0, 'remaining_region_dives', [], ...
     'visited_reef_ID', [], 'visited_manta_tow', [], ...
     'total_expended_dives', 0, ...
     'region_break_reef_ID', [], 'region_break_region', [], 'region_break_remaining', [], ...
     'global_break_reef_ID', [], 'global_break_remaining', [], ...
     'regional_effort_allocation', [], ... % [FN N C S] proportions used this timestep - for tracking and debugging
-    'site_skip_count', 0, 'site_skip_reef_ID', [], ... % breakfrequency: count of skip-then-find events per timestep
-    'site_skip_first_site', [], 'site_skip_success_site', [], ... % breakfrequency: first site that exceeded budget, and the site that fit within budget
+    'site_skip_count', 0, 'site_skip_reef_ID', [], ... % count of skip-then-find events per timestep
+    'site_skip_first_site', [], 'site_skip_success_site', [], ... % first site that exceeded budget, and the site that fit within budget
     'port_travel_dist_km', [], 'port_travel_dives', [], 'port_travel_from_region', [], 'port_travel_to_region', [], ... % case 1: inter-port travel when redistributing effort across regions
     'reef_travel_dist_km', [], 'reef_travel_dives', [], 'reef_travel_from', [], 'reef_travel_to', [], 'total_travel_dives', 0); % case 2: inter-reef travel between relocation reefs and original bleaching cat>3 reefs
-% --- How to interpret the site_skip_* fields (breakfrequency) ---
+% --- How to interpret the site_skip_* fields ---
 % These track the situation where a cull site on a reef requires more dives
 % than the remaining budget (global or regional), so it is skipped, and a
 % cheaper site on the SAME reef is found and successfully culled instead.
@@ -106,6 +108,17 @@ else
     remaining_region_dives = inf(length(META.COTS_cull_region), 1);
 end
 
+% Bleaching response thresholds for adaptive strategies (20 = default, 21 = shift +1 cat, 22 = shift -1 cat)
+is_adaptive = ismember(META.COTS_reefs2cull_strat, [20 21 22 23 24 25 26 27 28 29]); % cases 23-29 use same reef level thresholds as 20
+if is_adaptive
+    switch META.COTS_reefs2cull_strat
+        case 20; add_monitor_cat = 2; add_cull_cat = 3;
+        case 21; add_monitor_cat = 3; add_cull_cat = 4;
+        case 22; add_monitor_cat = 1; add_cull_cat = 2;
+        otherwise; add_monitor_cat = 2; add_cull_cat = 3; % default for cases 23-26, same as case 20
+    end
+end
+
 %% Suki Apr 2026 - regional effort redistribution for skip regions (strategy 19)
 % Skip-region priority reefs are monitored (not culled) - handled using monitor_only_IDs.
 % After accounting for expected monitoring cost, any surplus regional budget is redistributed
@@ -113,8 +126,8 @@ end
 %   FN(1) -> N(2) only;  N(2) -> C(3), S(4), FN(1);  C(3) -> S(4), N(2) only;  S(4) -> C(3), N(2) only
 % If no workable adjacent region exists (e.g., FN when N is also a skip region), the surplus
 % stays in that region and is consumed by non-priority culling/monitoring within it.
-if META.use_regional_dives && META.COTS_reefs2cull_strat == 19 && ~isempty(monitor_only_IDs)
-    proximity_order = {2; [3 4 1]; [4 2]; [3 2]};
+if META.use_regional_dives && is_adaptive && ~isempty(monitor_only_IDs)
+    proximity_order = {2; [3 4 1]; [4 2]; [3 2]}; 
 
     % Identify skip-region priority reefs (type T or P) within the monitor_only list
     [~, mo_rows] = ismember(monitor_only_IDs, META.COTS_cull_reeflist.Reef_ID);
@@ -125,7 +138,15 @@ if META.use_regional_dives && META.COTS_reefs2cull_strat == 19 && ~isempty(monit
         [~, pm_rows] = ismember(priority_monitor_IDs, META.COTS_cull_reeflist.Reef_ID);
         [~, pm_region_idx] = ismember(META.COTS_cull_reeflist.Region(pm_rows), META.COTS_cull_region);
         skip_regions_idx = unique(pm_region_idx);
-        all_skip = length(skip_regions_idx) == length(META.COTS_cull_region);
+        % Determine whether to expand effort within skip regions (no redistribution) or redistribute to workable regions.
+        % Case 20 (default): expand only when ALL regions are skip.
+        % Case 25: expand when at least 3 regions are skip.
+        % Case 26: always expand (never redistribute).
+        switch META.COTS_reefs2cull_strat
+            case 25; all_skip = length(skip_regions_idx) >= 3;
+            case 26; all_skip = ~isempty(skip_regions_idx);
+            otherwise; all_skip = length(skip_regions_idx) == length(META.COTS_cull_region);
+        end
 
         if ~all_skip
             % For each skip region: compute monitoring cost for its priority reefs,
@@ -214,7 +235,7 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
     this_reef_ID = ReefList(n); % (needs to be done again if condition above wasn't met)
     I = find(META.reef_ID == this_reef_ID); % locate this reef in the reef definition list
 
-    % Suki March 2026 WIP
+    % Suki March 2026
     % Look up this reef's region and check regional dive budget
     this_reef_region = META.COTS_cull_reeflist.Region(META.COTS_cull_reeflist.Reef_ID == this_reef_ID);
     [~, region_idx] = ismember(this_reef_region, META.COTS_cull_region);
@@ -224,10 +245,10 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
         continue % skip this reef - no dives remaining for its region
     end
 
-    %% Monitor-only handling for strategy 19
-    % Covers: (a) skip-region priority reefs, (b) non-priority cat>3 when all regions are skip.
+    %% Monitor-only handling for adaptive strategies (20/21/22)
+    % Covers: (a) skip-region priority reefs, (b) non-priority reefs above culling threshold when all regions are skip.
     % These reefs are surveyed (monitoring dives) but NOT culled.
-    if META.COTS_reefs2cull_strat == 19 && ismember(this_reef_ID, monitor_only_IDs)
+    if is_adaptive && ismember(this_reef_ID, monitor_only_IDs)
         monitor_dives_mo = ceil(META.COTS_cull_reeflist.nb_sites(I) * 1); % 1 monitoring dive per cull site
 
         % Check global budget
@@ -247,9 +268,9 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
         remaining_region_dives(region_idx) = remaining_region_dives(region_idx) - monitor_dives_mo;
 
         % Record monitoring
-        control_records.monitor_ID         = [control_records.monitor_ID; this_reef_ID];
-        control_records.monitor_dives       = [control_records.monitor_dives; monitor_dives_mo];
-        control_records.total_monitor_dives = sum(control_records.monitor_dives);
+        control_records.skip_region_monitor_ID     = [control_records.skip_region_monitor_ID; this_reef_ID];
+        control_records.skip_region_monitor_dives  = [control_records.skip_region_monitor_dives; monitor_dives_mo];
+        control_records.total_monitor_dives = sum(control_records.skip_region_monitor_dives) + sum(control_records.additional_monitor_dives);
         control_records.nb_monitored_reefs  = control_records.nb_monitored_reefs + 1;
         control_records.nb_control_sites    = [control_records.nb_control_sites; META.COTS_cull_reeflist.nb_sites(I)];
 
@@ -275,15 +296,15 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
     this_reef_COTS_per_tow_per_site = (0.22/0.6).*(this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end));
 
     %% Additional monitoring effort + travel costs for bleaching category 2 and relocation reefs (effort debited before culling)
-    % Suki March 2026 - adaptive control during bleaching - WIP 
+    % Suki March 2026 - adaptive control during bleaching
     % At the reef level, if the bleaching is mild, culling operations
     % continue but with addition effort for monitoring
     additional_monitoring = 0; % default no additional monitoring
 
-    if META.COTS_reefs2cull_strat == 19
+    if is_adaptive
         monitor_dives = 0; % initialise monitor dives
 
-        if bleaching_category(I) == 2
+        if bleaching_category(I) == add_monitor_cat
             additional_monitoring = 1;
             monitor_dives = monitor_dives + ceil(META.COTS_cull_reeflist.nb_sites(I)*1); % additional no. of dives * no. of cull sites
             % assume that we need additional monitor effort equivalent to 1
@@ -372,7 +393,7 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
         sites_culled = 0 ; % Suki Apr 2026: track number of actually culled sites
         global_budget_hit = false ; % Suki Apr 2026: flag indicating if global budget was hit
         region_budget_hit = false(size(remaining_region_dives)); % Suki Apr 2026: flag indicating if regional budget was hit for this reef
-        first_skipped_site = 0; % breakfrequency: track the first site skipped due to insufficient budget
+        first_skipped_site = 0; 
 
         while site <= length(sites_over_ET) && remaining_dives > 0 % go through all sites above ET
 
@@ -380,7 +401,7 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
             COTS_per_tow_this_site = this_reef_COTS_per_tow_per_site(ctrl_site, :); % original detectability
             
             additional_culling = 0;
-            if META.COTS_reefs2cull_strat == 19 && bleaching_category(I) == 3
+            if is_adaptive && bleaching_category(I) == add_cull_cat
                 % calculate adjusted CoTS per tow this site
                 % CoTS density that would need to be present to produce the
                 % same reduction of CoTS density under heat stress (DHW in
@@ -450,7 +471,7 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
             end            
             
 
-            if META.COTS_reefs2cull_strat == 19 && additional_culling == 1
+            if is_adaptive && additional_culling == 1
                 record_site_post_densities(ctrl_site,META.COTS_adult_min_age:end) = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./(sum(COTS_per_tow_this_site)/current_reef_ET(I)); % original culling factor without heat stress adjustment
                 % assume that with additional effort (calculated using adjusted CoTS density), the site is successfully culled to ET
             else
@@ -459,7 +480,7 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
 
             sites_culled = sites_culled + 1 ; % Suki Apr 2026: increment actual cull count
 
-            % breakfrequency: record skip-then-find event (a site was too expensive, but a cheaper site on the same reef was found)
+            % record skip-then-find event (a site was too expensive, but a cheaper site on the same reef was found)
             if first_skipped_site > 0
                 control_records.site_skip_count = control_records.site_skip_count + 1;
                 control_records.site_skip_reef_ID = [control_records.site_skip_reef_ID; this_reef_ID];
@@ -508,12 +529,12 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
 
     %% Suki March 2026: track effort and monitoring at the reef level (recorded for every visited reef, culled or not)
     control_records.nb_control_sites = [control_records.nb_control_sites; META.COTS_cull_reeflist.nb_sites(I)]; % total number of cull sites on this reef (from the reef list, independent of how many were actually culled)
-    if META.COTS_reefs2cull_strat == 19 && additional_monitoring == 1
-        % additional_monitoring == 1 only for bleaching category 2 reefs: culling proceeds but extra survey dives are added
-        control_records.monitor_ID = [control_records.monitor_ID; this_reef_ID];                                % ID of category-2 reefs where extra monitoring dives were added on top of culling
+    if is_adaptive && additional_monitoring == 1
+        % additional_monitoring == 1 only for bleaching category add_monitor_cat reefs: culling proceeds but extra survey dives are added
+        control_records.additional_monitor_ID    = [control_records.additional_monitor_ID; this_reef_ID];     % ID of category-2 reefs where extra monitoring dives were added on top of culling
         control_records.nb_monitored_reefs = control_records.nb_monitored_reefs + 1;                            % running count of reefs with extra monitoring (category 2 only here; monitor-only reefs are counted in the monitor-only block above)
-        control_records.monitor_dives = [control_records.monitor_dives; monitor_dives];                         % extra monitoring dives spent on this reef (1 dive per cull site)
-        control_records.total_monitor_dives = sum(control_records.monitor_dives);                               % total monitoring dives spent across all monitored reefs this timestep
+        control_records.additional_monitor_dives  = [control_records.additional_monitor_dives; monitor_dives];  % extra monitoring dives spent on this reef (1 dive per cull site)
+        control_records.total_monitor_dives = sum(control_records.skip_region_monitor_dives) + sum(control_records.additional_monitor_dives); % total monitoring dives spent across all monitored reefs this timestep
     end
 
     control_records.visited_reef_ID = [control_records.visited_reef_ID; this_reef_ID];                          % ID of every reef where a manta tow was performed (includes culled, monitor-only, and category-2 reefs)
