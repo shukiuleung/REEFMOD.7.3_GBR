@@ -12,6 +12,7 @@ function [full_list_ID, unvisited, monitor_only_IDs, relocation_dist_km] = f_mak
     bleaching_category, severely_bleached, control_records_prev, ...
     current_COTS_per_tow)
 
+% Suki: 05/2026: updated New_regions_TS_SL following the newest advice on in/out of GBRMP. cross checked with GBR_REEFS
 % Tina 07/2023: now have fixed target reef list in 'New_regions_TS.mat', updated for new GBRMPA 2023 PR list.
 % Control at target (T), then priority (P), then nonpriority reef (N), as specified in 'reef_type'.
 % Region as FN, N, C, S -> no 'out' anymore (as in GBR_REEFS.AREA_DESCR), ie outside of the Marine Park, meaning that
@@ -71,8 +72,11 @@ switch META.COTS_reefs2cull_strat
         for rfs = 1:length(target_ID)
             this_reef_ID = target_ID(rfs);
             this_reef_COTS_densities_per_site = COTS_densities_per_site{this_reef_ID,1}; % Extract COTS density for all sites
-            % Calculates manta tow equivalent (number of coTS per tow) for all sites
-            this_reef_COTS_per_tow_per_site = (0.22/0.6)*sum(this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end),2);
+            % Sum across subadults and adults after adjusting for imperfect detectability
+            this_reef_COTS_total_densities_per_site = sum(this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end),2);
+            % Estimate the equivalent CoTS per tow
+            this_reef_COTS_per_tow_per_site = f_convert_CoTS_density_2_tow(this_reef_COTS_total_densities_per_site, META.total_area_cm2);
+
             % Find sites with manta tows above ecological threshold (ET)
             sites_over_ET = find(this_reef_COTS_per_tow_per_site > current_reef_ET(this_reef_ID));
 
@@ -101,8 +105,8 @@ switch META.COTS_reefs2cull_strat
         end
 
         close_reefs = unique(close_reefs);%clean it up
-        close_reefs = close_reefs(~ismember(close_reefs, target_ID)); %remove the reefs that are already in target list
-        other_reefs = META.reef_ID(~ismember(META.reef_ID, vertcat(target_ID, close_reefs))); % find the remaining reefs
+        close_reefs = setdiff(close_reefs, target_ID); %remove the reefs that are already in target list
+        other_reefs = setdiff(META.reef_ID,vertcat(target_ID, close_reefs)); % find the remaining reefs
         full_list_ID = vertcat(target_ID, close_reefs, other_reefs); % update priority list with length = length(META.reef_ID)
 
     case {10, 11}  % Outbreak front: look for the AIMS sector with the highest CoTS density
@@ -142,7 +146,10 @@ switch META.COTS_reefs2cull_strat
         % 13: no more than 3 CoTS per tow (META.max_COTS), otherwise with total coral cover more than 20% (META.min_control_cover)
         priority_list_tmp0 = vertcat(target_ID, priority_ID, nonpriority_ID); % each list might be shuffled at every time step, but doesn't matter here.
 
-        COTS_per_tow = (0.22/0.6)*sum(current_COTS_densities(priority_list_tmp0,META.COTS_adult_min_age:end),2); % Convert into COTS per tow and sort in priority order
+        % Sum across subadults and adults after adjusting for imperfect detectability
+        current_COTS_total_densities = sum(current_COTS_densities(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end),2);
+        % Estimate the equivalent CoTS per tow
+        COTS_per_tow = f_convert_CoTS_density_2_tow(current_COTS_total_densities, META.total_area_cm2);
 
         switch META.COTS_reefs2cull_strat
             case 12
@@ -153,7 +160,7 @@ switch META.COTS_reefs2cull_strat
         end
         priority_list_tmp1 = priority_list_tmp0(I); % only keeps reef ID with more than 3 CoTS per tow
 
-        J = priority_list_tmp0(~ismember(priority_list_tmp0, priority_list_tmp1)); % finds remaining reef ID
+        J = setdiff(priority_list_tmp0,priority_list_tmp1); % finds remaining reef ID
         full_list_ID = vertcat(priority_list_tmp1, J); % add the list of non priority reefs underneath (preserves first prioritisation)
 
     case {14, 15}  % Protection status - At each timestep, still make priority reef list etc but only include green zone reefs.
@@ -165,7 +172,7 @@ switch META.COTS_reefs2cull_strat
             case 15; priority_list_tmp1 = priority_list_tmp0(priority_list_GreenZone==0); % only keeps reef ID within Blue Zones
         end
 
-        J = priority_list_tmp0(~ismember(priority_list_tmp0, priority_list_tmp1)); % finds remaining reef ID
+        J = setdiff(priority_list_tmp0,priority_list_tmp1); % finds remaining reef ID
         full_list_ID = vertcat(priority_list_tmp1, J); % add the list of non priority reefs underneath (preserves first prioritisation)
 
     case { 16, 17, 18}  % Weighting with CoTS connec (potential as source for CoTS larvae) and coral cover.
@@ -212,8 +219,10 @@ switch META.COTS_reefs2cull_strat
         nonpriority_list_tmp2 = nonpriority_list_tmp1(J); % New top of nonpriority list
 
         % Combine all lists - this preserves the order priority > nonpriority while re-ordering for zoning within each
-        full_list_ID = vertcat(priority_list_tmp2, priority_list_tmp1(~ismember(priority_list_tmp1, priority_list_tmp2)),...
-            nonpriority_list_tmp2, nonpriority_list_tmp1(~ismember(nonpriority_list_tmp1, nonpriority_list_tmp2))); % New list
+        full_list_ID = vertcat(priority_list_tmp2, setdiff(priority_list_tmp2, priority_list_tmp1),...
+            nonpriority_list_tmp2, setdiff(nonpriority_list_tmp2, nonpriority_list_tmp1)); % New list
+
+
     case 19 % control - maximise benefits from Tina's NESP results - WIP
          full_list_ID = vertcat(target_ID, priority_ID);
 
@@ -227,7 +236,7 @@ switch META.COTS_reefs2cull_strat
         % 26 = alternative remaining workable region threshold: do not redistribute effort to closest workable region, always expand effort. effort always stay in same region with no travelling.
         % 27 = alternative knowledge level: CoTS risk + predicted manta
         % 28 = alternative knowledge level: CoTS benefits + predicted manta
-        % 29 = adaptive - Maximise benefits
+        % 29 = adaptive - Maximise benefits - WIP
 
         % Case-specific bleaching thresholds for reef-level decisions (cases 21 and 22 shift the default case-20 thresholds by +/-1 category)
         % Cases 23 and 24 use the same reef-level thresholds as case 20 but change the regional bleaching threshold.

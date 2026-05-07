@@ -20,6 +20,7 @@ META.COTS_cull_region = {'FN';'N';'C';'S'};  % All regions -> GBR-wide (previous
 % META.COTS_cull_region = {'C'};  % Centre (previously strategy #6)
 % META.COTS_cull_region = {'S'};  % South (previously strategy #8)
 % META.COTS_cull_region = {'N';'C';'S'}; 
+% Suki May 2026: note updated New_regions_TS_SL includes 'out'.
 
 META.doing_COTS_heat_stress_detectibility = 1; % Uses evidance from Cook et al. in review
 
@@ -48,7 +49,7 @@ end
 % ========================================================================
 
 % Choose culling strategy (detail in f_makeReefList_NEW)
-META.COTS_reefs2cull_strat = 28;
+META.COTS_reefs2cull_strat = 19;
 % 1 - GBRMPA strategy that goes to Target reefs first, then Priority reefs, then Non Priority reefs
 % 9 - Outbreak front (latitude): GBRMPA strategy that goes to Target reefs first, then also goes to 0.5° lat (~50 km) from target reefs with outbreaks - whole GBR.
 % 10 - Outbreak front (sector): look for the AIMS sector (1-11) that has the highest density of COTS on ALL reefs, start control there, then remaining.
@@ -82,7 +83,9 @@ META.COTS_reefs2cull_strat = 28;
 META.COTS_strat_schedule = [];
 
 % Updates from Tina (July 2023) - now have fixed target reef list. Control at T, then P, then N.
-load('New_regions_TS.mat') %this has been updated for new GBRMPA 2023 PR list and includes target reefs now
+load('New_regions_TS_SL.mat') %this has been updated for new GBRMPA 2023 PR list and includes target reefs now
+% Suki May 05: updated again to match Isobel's definition of in/out of
+% GBRMP
 % Tina Jul 25: no out (outside) anymore, all reefs in the Top North now included in the MP
 META.COTS_cull_reeflist = nregions(META.reef_ID,:);
 
@@ -127,13 +130,17 @@ is_hotspot = refugia_lookup.GCM == OPTIONS.GCM & refugia_lookup.SSP == OPTIONS.S
 META.hotspot = refugia_lookup.ReefID(is_hotspot);
 
 %% CoTS risk rank (coral cover lost to CoTS from counterfactual across six climate futures) for each reef to determine control priority - Tina Jan 2026
-load('CoTSriskrank_lookup.mat');
+load('CoTSriskrank_lookup.mat'); % aggregated across time 2025-2075
+CoTSreefloss = readtable('CoTSReefLoss_ByYear_ByClimateFuture'); % yearly for regional effort allocation
+CoTSreefloss = convertvars(CoTSreefloss, ["GCM", "SSP"], "string");
 
 % Filter for the current GCM and SSP
-is_current = CoTSriskrank.GCM == OPTIONS.GCM & CoTSriskrank.SSP == OPTIONS.SSP;
+is_current_rank = CoTSriskrank.GCM == OPTIONS.GCM & CoTSriskrank.SSP == OPTIONS.SSP;
+is_current_loss = CoTSreefloss.GCM == OPTIONS.GCM & CoTSreefloss.SSP == OPTIONS.SSP;
 
 % Extract the reef IDs and their ranks for this scenario
-META.cots_risk_rank = CoTSriskrank.CoTSRiskRank(is_current);
+META.cots_risk_rank = CoTSriskrank.CoTSRiskRank(is_current_rank);
+META.cots_reef_loss = CoTSreefloss(is_current_loss,:);
 
 %% Key source reef (KSR) reef sizes (if running scenarios 25-30 and using KSR ranking then need reef sizes) - Tina Feb 2026
 load('KSR_reefsizes.mat');
@@ -217,7 +224,7 @@ META.max_dives_per_site = 300; %For high effort reefs, specify stopping rule thr
 
 META.max_dives_per_reef = 3000; % For high effort reefs, specify stopping rule threshold number of dives at reef level - for hours convert * (40/60) = 2000 hours
 
-% Suki April 2026 WIP - dynamic (now static) effort allocation across region.
+% Suki April 2026 WIP - static effort allocation across region.
 % Compute regional effort allocation proportional to mean CoTS loss area (counterfactual 2025-2075) per region.
 % Regions: 1=Far Northern (FN), 2=Cairns/Cooktown (N), 3=Townsville/Whitsunday (C), 4=Mackay/Capricorn (S)
 % Reefs with AREA_DESCR == 'out' (outside Marine Park) are excluded from this calculation.

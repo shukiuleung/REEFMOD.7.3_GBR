@@ -9,14 +9,14 @@ PARAMETERS
 META.nb_time_steps = nb_time_steps;
 
 %% Reef areas
-load('GBR_REEF_POLYGONS_2024.mat') % with updated estimates of ungrazable substratum from benthic maps 10/2023
+load('GBR_REEF_POLYGONS_2026.mat') % with updated estimates of ungrazable substratum from benthic maps 10/2023
 % Reef areas based on the 3D surface areas of geomorphic classes down to 20m depth (Roelfsema et al. 2021).
 % Available for all geomorphic classes (Geom_total) and coral geomorphic classes (Geom_CH). Old GBRMPA estimates
 % provided for the record (Reference_Area_km2). Also contains reef specific estimates of UNGRAZABLE (Bozec et al. 2025),
 % and corrected assignment of shelf position (Caro) and zoning status (Tina).
 
 %% Reef selection
-META.reef_ID = [680:700]'; % Entire GBR
+META.reef_ID = [1:3806]'; % Entire GBR
 % META.reef_ID = GBR_REEFS.Reef_ID(GBR_REEFS.LAT<-16.78 & GBR_REEFS.LAT >-17.12 & GBR_REEFS.LON >146.05); % Region around Moore Reef (24 reefs)
 % META.reef_ID = GBR_REEFS.Reef_ID(GBR_REEFS.sLAT<-15.76 & GBR_REEFS.LAT >-17.34); % Cairns region reduced (190 reefs) for restoration
 
@@ -150,7 +150,7 @@ rng(simul); % to get a repeatable scheme of random number generation in RAND, RA
 
 INITIALISATION
 
-settings_GBR_NEW
+settings_GBR_v2_0
 
 if META.doing_restoration == 1
 
@@ -250,6 +250,6 @@ end
 
 
 %% RUN THE MODEL WITH THIS SETUP
-clearvars -except META REEF CORAL ALGAL CONNECT_CORAL CONNECT_COTS REEF_POP REEF_COTS
+clearvars -except META REEF CORAL ALGAL CONNECT_CORAL CONNECT_COTS REEF_POP
 
-[RESULT, RECORD] = f_runmodel(META, REEF, CORAL, ALGAL, CONNECT_CORAL, CONNECT_COTS, REEF_POP, REEF_COTS) ; % Feb 2025: need to feed with two connectivity sets
+[RESULT, RECORD] = f_runmodel(META, REEF, CORAL, ALGAL, CONNECT_CORAL, CONNECT_COTS, REEF_POP) ; % Feb 2025: need to feed with two connectivity sets

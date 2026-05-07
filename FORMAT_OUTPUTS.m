@@ -9,7 +9,7 @@
 % format_extract = 'extended', which compiles model outputs on a 6-month basis
 %______________________________________________________________________________________________
 
-load('GBR_REEF_POLYGONS_2024.mat') % new habitat areas based on geomorphic map
+load('GBR_REEF_POLYGONS_2026.mat') % new habitat areas based on geomorphic map
 
 % Scale according to chosen format
 switch format_extract
@@ -112,7 +112,7 @@ if OPTIONS.doing_COTS == 1
     COTS_larval_output = COTS_mantatow;
 
     % If recording CoTS densities predicted by the model before being replaced by observations (only during hindcast) 
-    COTS_predicted_densities = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1, 16, 'single'); % 16 age classes
+    % COTS_predicted_densities = zeros(NB_SIMULATIONS, META.nb_reefs, TIME+1, 16, 'single'); % 16 age classes
 end
 
 %% Populate outputs
@@ -217,22 +217,23 @@ for simul = 1:NB_SIMULATIONS
     if OPTIONS.doing_COTS == 1
         
         tmp_COTS_densities = squeeze(OUTPUTS(simul).RESULT.COTS_all_densities); % Density for 400m2 of each age class
-        tmp_COTS_predicted_densities = squeeze(OUTPUTS(simul).RESULT.COTS_all_densities_predicted); % Density for 400m2 (predicted before erasure by obs)
+        %tmp_COTS_predicted_densities = squeeze(OUTPUTS(simul).RESULT.COTS_all_densities_predicted); % Density for 400m2 (predicted before erasure by obs)
         tmp_COTS_settler_density = squeeze(OUTPUTS(simul).RESULT.COTS_settler_densities); % Density for 400m2
         tmp_COTS_larval_supply = squeeze(OUTPUTS(simul).RESULT.COTS_larval_supply); % Density for 400m2
         tmp_COTS_larval_output = squeeze(OUTPUTS(simul).RESULT.COTS_larval_output); % Density for 400m2
 
         COTS_densities(simul,:,:,:) = average_time_4D(tmp_COTS_densities, scale, cols);
-        COTS_predicted_densities(simul,:,:,:) = average_time_4D(tmp_COTS_predicted_densities, scale, cols);
+        %COTS_predicted_densities(simul,:,:,:) = average_time_4D(tmp_COTS_predicted_densities, scale, cols);
         COTS_settler_density(simul,:,:,:) = average_time_3D(tmp_COTS_settler_density, scale, cols);
         COTS_larval_supply(simul,:,:,:) = average_time_3D(tmp_COTS_larval_supply, scale, cols);
         COTS_larval_output(simul,:,:,:) = average_time_3D(tmp_COTS_larval_output, scale, cols);
 
         % Estime CoTS per maqnta tow, assuming 0.6 CoTS per grid ~ 0.22 CoTS per tow
         % (0.22 per tow is equivalent to 1500 COTS per km2 (Moran & De'ath 92), so that 1 COTS per grid (400m2) is equivalent to 0.22*2500/1500
+        % Suki May 2026: use new non-linear conversion by YM
         for t=1:size(COTS_densities,3)
             TMP = squeeze(COTS_densities(simul,:,t,:)).*META.COTS_detectability(ones(1, META.nb_reefs),:);
-            COTS_mantatow(simul,:,t) = (0.22/0.6)*sum(TMP(:,META.COTS_adult_min_age:end),2);
+            COTS_mantatow(simul,:,t) = f_convert_CoTS_density_2_tow(sum(TMP(:,META.COTS_adult_min_age:end),2), META.total_area_cm2);
         end
     end
 

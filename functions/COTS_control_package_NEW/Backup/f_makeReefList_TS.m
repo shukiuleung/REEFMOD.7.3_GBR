@@ -5,7 +5,7 @@ function [sorted_indices, criteria, global_trigger, RESULT] = f_makeReefList_TS(
 %Applying new Habitat maps and re-defined GBR regions
 
 % Updates from Tina (July 2023) - now have fixed target reef list. Control at T, then P, then N.
-load('New_regions_TS.mat') %this has been updated for new GBRMPA 2023 PR list and includes target reefs now
+load('New_regions_TS_SL.mat') %this has been updated for new GBRMPA 2023 PR list and includes target reefs now
 %new_regions=cell2table(nregions, 'VariableNames', {'Index' %'Priority''region'}); %read in data as a table, so just change column names so the same
 new_regions = nregions;
 new_regions.Properties.VariableNames = {'Index' 'Reef_type' 'region'}; 

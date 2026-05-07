@@ -79,7 +79,7 @@ end
 manta_tow_rank_n = normalize(manta_tow_prev, 'range'); % normalise to 0-1
 
 %% Reef priority (static)
-reef_priority = META.COTS_cull_reeflist.reef_type; % T > P > N
+reef_priority = string(META.COTS_cull_reeflist.reef_type); % T > P > N
 reef_priority_rank = zeros(size(reef_priority));
 reef_priority_rank(reef_priority == 'T') = 3;
 reef_priority_rank(reef_priority == 'P') = 2;

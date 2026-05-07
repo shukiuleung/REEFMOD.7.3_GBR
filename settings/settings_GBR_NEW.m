@@ -5,7 +5,7 @@
 % Yves-Marie Bozec, y.bozec@uq.edu.au, 12/2019. Last update: 02/2025
 %__________________________________________________________________________
 
-% load('GBR_REEF_POLYGONS_2024.mat') % should be already loaded in f_multiple_reef
+% load('GBR_REEF_POLYGONS_2026.mat') % should be already loaded in f_multiple_reef
 
 %% INITIALISE REEF STATES WITH AIMS LTMP TRANSECT AND MANTA TOW DATA
 
