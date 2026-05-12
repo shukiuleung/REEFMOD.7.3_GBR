@@ -49,7 +49,7 @@ end
 % ========================================================================
 
 % Choose culling strategy (detail in f_makeReefList_NEW)
-META.COTS_reefs2cull_strat = 19;
+META.COTS_reefs2cull_strat = 1;
 % 1 - GBRMPA strategy that goes to Target reefs first, then Priority reefs, then Non Priority reefs
 % 9 - Outbreak front (latitude): GBRMPA strategy that goes to Target reefs first, then also goes to 0.5° lat (~50 km) from target reefs with outbreaks - whole GBR.
 % 10 - Outbreak front (sector): look for the AIMS sector (1-11) that has the highest density of COTS on ALL reefs, start control there, then remaining.

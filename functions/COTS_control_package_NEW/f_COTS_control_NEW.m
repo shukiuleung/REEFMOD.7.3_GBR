@@ -280,16 +280,16 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
         control_records.nb_control_sites    = [control_records.nb_control_sites; META.COTS_cull_reeflist.nb_sites(I)];
 
         % Record as visited (manta tow)
+        % Sum detected densities across age classes FIRST, then convert (correct: f(sum) not sum(f), nonlinear conversion)
         tmp_COTS_per_site = COTS_densities_per_site{I,1};
+        tmp_detected_total = sum(tmp_COTS_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end), 2);
+        tmp_COTS_per_tow   = f_convert_CoTS_density_2_tow(tmp_detected_total, META.total_area_cm2);
         if META.doing_COTS_heat_stress_detectibility == 1
-            tmp_COTS_per_site = (tmp_COTS_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end)).*exp(-0.25 * all_DHWs(I));
-        else
-            tmp_COTS_per_site = (tmp_COTS_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end));
+            tmp_COTS_per_tow = tmp_COTS_per_tow .* exp(-0.25 * all_DHWs(I));
         end
-        tmp_COTS_per_tow  = f_convert_CoTS_density_2_tow(tmp_COTS_per_site, META.total_area_cm2);
 
         control_records.visited_reef_ID   = [control_records.visited_reef_ID; this_reef_ID];
-        control_records.visited_manta_tow = [control_records.visited_manta_tow; sum(tmp_COTS_per_tow, 'all')];
+        control_records.visited_manta_tow = [control_records.visited_manta_tow; sum(tmp_COTS_per_tow)];
 
         visited_reefs = visited_reefs + 1;
         n = n + 1;
@@ -300,9 +300,12 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
     % Extract COTS density for all sites
     this_reef_COTS_densities_per_site = COTS_densities_per_site{I,1};
     
+    % Keep per-age-class detected densities — needed later for the weighted culling efficiency under heat stress
     this_reef_COTS_densities_per_site_detected = this_reef_COTS_densities_per_site(:,META.COTS_adult_min_age:end).*META.COTS_detectability(META.COTS_adult_min_age:end);
-    % Estimate the equivalent CoTS per tow
-    this_reef_COTS_per_tow_per_site = f_convert_CoTS_density_2_tow(this_reef_COTS_densities_per_site_detected, META.total_area_cm2);
+    % Sum detected densities across ALL adult age classes first (correct order: f(sum) not sum(f), because the Moran & De'ath conversion is nonlinear)
+    this_reef_detected_total_per_site = sum(this_reef_COTS_densities_per_site_detected, 2); % [n_sites x 1] aggregate detected density per site
+    % Estimate the equivalent CoTS per tow — nonlinear conversion applied ONCE to the aggregate
+    this_reef_COTS_per_tow_per_site = f_convert_CoTS_density_2_tow(this_reef_detected_total_per_site, META.total_area_cm2); % [n_sites x 1]
 
 
     %% Additional monitoring effort + travel costs for bleaching category 2 and relocation reefs (effort debited before culling)
@@ -364,27 +367,27 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
     %% MANTA TOW COTS DENSITY AND SITE-LEVEL TRIGGER
 
     if META.doing_COTS_heat_stress_detectibility == 1 && additional_monitoring == 0 % Cook et al. in review
-
-        this_reef_COTS_per_tow_per_site_reduced = this_reef_COTS_per_tow_per_site.*exp(-0.25 * all_DHWs(I));
+        % Apply scalar heat stress factor to the aggregate MTC (correct: scalar multiplier on already-aggregated value)
+        this_reef_COTS_per_tow_per_site_reduced = this_reef_COTS_per_tow_per_site .* exp(-0.25 * all_DHWs(I));
         %Scalar unit. Proportion of CoTS per increase in DHW (Ranges from 1-0.02 as a decay function)
 
         % Find sites with manta tows (reduced detectability due to DHW) above ecological threshold (ET)
-        sites_over_ET = find(sum(this_reef_COTS_per_tow_per_site_reduced,2) > current_reef_ET(I));
+        sites_over_ET = find(this_reef_COTS_per_tow_per_site_reduced > current_reef_ET(I));
 
     else
         % Find sites with manta tows above ecological threshold (ET)
         % assume that with additional monitoring we can detect CoTS as if
         % conditions were normal
 
-        sites_over_ET = find(sum(this_reef_COTS_per_tow_per_site,2) > current_reef_ET(I));
+        sites_over_ET = find(this_reef_COTS_per_tow_per_site > current_reef_ET(I));
 
     end
 
     % Suki Apr 2026: Sort sites_over_ET by descending CoTS density for optimal effort allocation
     if META.use_site_skip_find == 1
         if ~isempty(sites_over_ET)
-            sum_COTS_per_tow_per_site = sum(this_reef_COTS_per_tow_per_site,2);
-            [~, sort_order] = sort(sum_COTS_per_tow_per_site(sites_over_ET), 'descend');
+            % this_reef_COTS_per_tow_per_site is [n_sites x 1] after the aggregate-then-convert fix — no extra sum needed
+            [~, sort_order] = sort(this_reef_COTS_per_tow_per_site(sites_over_ET), 'descend');
             sites_over_ET = sites_over_ET(sort_order);
         end
     end
@@ -395,7 +398,7 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
     if ~isempty(sites_over_ET) && remaining_dives > 0 % if there are sites to treat, and dives remaining, do control
 
         last_reef_COTScontrolled = this_reef_ID; % set this reef as the last controlled one for the next step; set here because we don't know when we run out of dives
-        record_site_post_densities = this_reef_COTS_densities_per_site; % ini
+        record_site_post_densities = this_reef_COTS_densities_per_site; % init
 
         site = 1 ; % iterator of culled sites
         record_nb_dives = 0 ; % track the number of dives to control all sites of a reef
@@ -408,26 +411,41 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
         while site <= length(sites_over_ET) && remaining_dives > 0 % go through all sites above ET
 
             ctrl_site = sites_over_ET(site) ;
-            COTS_per_tow_this_site = this_reef_COTS_per_tow_per_site(ctrl_site, :); % original detectability
+            COTS_per_tow_this_site = this_reef_COTS_per_tow_per_site(ctrl_site); % scalar MTC for this site (aggregate-converted)
+
+            % Pre-compute age-class proportions and per-class heat stress culling effects for this site.
+            % These are used in both the budget (additional_culling) and culling factor (culling_factor_heat) sections.
+            % age_props: proportion of each adult age class in the detectable density at this site.
+            % culling_dhw_effects: age-specific culling kill-rate multiplier under current DHW.
+            detected_this_site        = this_reef_COTS_densities_per_site_detected(ctrl_site, :); % [1 x n_adult_ages]
+            total_detected_this_site  = this_reef_detected_total_per_site(ctrl_site);              % scalar
+            if total_detected_this_site > 0
+                age_props = detected_this_site / total_detected_this_site; % [1 x n_adult_ages], sums to 1
+            else
+                age_props = ones(1, numel(detected_this_site)) / numel(detected_this_site);
+            end
             
+            if META.doing_COTS_heat_stress_detectibility == 1
+                culling_dhw_effects = exp(META.log_culling_dhw_effects(META.COTS_adult_min_age:end)' * all_DHWs(I)); % [n_adult_ages x 1]
+            end
+
             additional_culling = 0;
             if is_adaptive && bleaching_category(I) == add_cull_cat
-                % calculate adjusted CoTS per tow this site
-                % CoTS density that would need to be present to produce the
-                % same reduction of CoTS density under heat stress (DHW in
-                % bleaching category 3, taking reduced culling efficiency
-                % into account. 
-                % caveat: assuming CoTS can ultimately be culled to ET when
-                % in reality that might not be the case
+                % calculate adjusted CoTS per tow for this site under heat stress.
+                % The weighted correction term represents the extra MTC needed to achieve the same
+                % kill as without heat stress, averaged across age classes by their proportion.
+                % caveat: assuming CoTS can ultimately be culled to ET when in reality that might not be the case
                 additional_culling = 1;
-                adjusted_COTS_per_tow_this_site = COTS_per_tow_this_site + current_reef_ET(I).*(1./(exp(META.log_culling_dhw_effects(META.COTS_adult_min_age:end)' * all_DHWs(I))) - 1);
-                control_dives = (ceil((4.18)*(sum(adjusted_COTS_per_tow_this_site)/0.015)^0.667));
+                COTS_per_tow_this_site_sizeclass = COTS_per_tow_this_site * age_props;
+                adjusted_COTS_per_tow_this_site = COTS_per_tow_this_site_sizeclass + current_reef_ET(I).*(1./culling_dhw_effects - 1);
+                control_dives = ceil(4.18 * (sum(adjusted_COTS_per_tow_this_site)/0.015)^0.667);
+
             else                
                     % First need to check if we've got enough remaining dives for this site
                     % Number of control dives required for culling to this threshold
                     % Karlo: here 8 is the standard number of divers, I use team dives per site, using different boats would require a rewrite
                     % Ceil to round, as the whole team will finish the dive on the same site
-                    control_dives = (ceil((4.18)*(sum(COTS_per_tow_this_site)/0.015)^0.667)); %indiv dives
+                    control_dives = (ceil((4.18)*(COTS_per_tow_this_site/0.015)^0.667)); %indiv dives
                     % YM: this_site_tow/0.015 converts number of CoTS per tow into a density of CoTS per hectare
         
                     % control_dives=ceil(166.7*(COTS_per_tow_this_site/0.015)^0.665); % Fletcher et al. 2021, divided by 40 assuming 40 min bottom time?
@@ -465,34 +483,22 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
             remaining_region_dives(region_idx) = remaining_region_dives(region_idx) - control_dives;
             remaining_dives = remaining_dives - control_dives;
 
-            % Suki May 2026: convert ET and CoTS_per_tow_this_site into density per grid 
-            % new conversion from per tow into densities is non-linear (new
-            % formula by YM). so we cannot calculate culling factor
-            % directly from CoTS per tow and apply it on densities.
-            ET_grid = f_convert_CoTS_tow_2_density(current_reef_ET(I), 0, META.total_area_cm2);
-            COTS_densities_this_site = f_convert_CoTS_tow_2_density(sum(COTS_per_tow_this_site), 0, META.total_area_cm2);
-                     
-            % Standard culling factor (no heat stress)
-            culling_factor_standard = COTS_densities_this_site/ET_grid;
+            % If allowed to cull (May 2026): account for non-linearity in conversion CoTS density <-> CoTS per tow
+            COTS_per_tow_culled_this_site = COTS_per_tow_this_site - current_reef_ET(I);
 
-            if META.doing_COTS_heat_stress_detectibility == 1
-                % Apply heat stress to culling efficiency (age-specific reduction from Cook et al.): fewer CoTS are killed per dive
-                % Clamped to >=1 because culling cannot increase CoTS density - if heat stress is so severe that the
-                % effective kill rate falls below ET, the dive still occurs but has no measurable impact on density
-                COTS_per_tow_this_site_reduced = COTS_per_tow_this_site .* (exp(META.log_culling_dhw_effects(META.COTS_adult_min_age:end)' * all_DHWs(I)));
-                COTS_densities_this_site_reduced = f_convert_CoTS_tow_2_density(sum(COTS_per_tow_this_site_reduced), 0, META.total_area_cm2);
-
-                % cap at 1 max
-                culling_factor_heat = max(1, COTS_densities_this_site_reduced/ET_grid);
-            end            
-            
-            if is_adaptive && additional_culling == 1 || META.doing_COTS_heat_stress_detectibility == 0
-                record_site_post_densities(ctrl_site,META.COTS_adult_min_age:end) = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./culling_factor_standard; % original culling factor without heat stress adjustment
-                % assume that with additional effort (calculated using adjusted CoTS density), the site is successfully culled to ET
-            else
-                record_site_post_densities(ctrl_site,META.COTS_adult_min_age:end) = this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end)./culling_factor_heat;
+            if META.doing_COTS_heat_stress_detectibility == 1 && additional_culling == 0
+                COTS_per_tow_culled_this_site = sum(COTS_per_tow_this_site * age_props .* culling_dhw_effects) - current_reef_ET(I);
             end
 
+            % Convert the loss of CoTS per tow into loss of CoTS density - this time use a deterministic prediction (ie, NB_tows = 0)
+            % to avoid negatives down the line
+            COTS_density_culled_this_site = f_convert_CoTS_tow_2_density(COTS_per_tow_culled_this_site, 0, META.total_area_cm2);
+
+            % always cap to maximum 1 just in case culled > total detected
+            culling_factor = min(1, COTS_density_culled_this_site/this_reef_detected_total_per_site(ctrl_site));
+
+            record_site_post_densities(ctrl_site,META.COTS_adult_min_age:end) = (this_reef_COTS_densities_per_site(ctrl_site,META.COTS_adult_min_age:end))*(1 - culling_factor);
+            
             sites_culled = sites_culled + 1 ; % Suki Apr 2026: increment actual cull count
 
             % record skip-then-find event (a site was too expensive, but a cheaper site on the same reef was found)
@@ -516,6 +522,7 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
             control_records.region_break_region = [control_records.region_break_region; hit_regions(hr)];        % which region (1=FN, 2=N, 3=C, 4=S) ran out of dives
             control_records.region_break_remaining = [control_records.region_break_remaining; remaining_region_dives(hit_regions(hr))]; % leftover regional dives at the point of running out (diagnostic)
         end
+        remaining_dives = remaining_dives - sum(remaining_region_dives(region_budget_hit)); % deduct stranded regional dives from global pool to keep pools consistent
         remaining_region_dives(region_budget_hit) = 0; % zero out exhausted regions so future reefs in those regions are skipped
 
         % Suki Apr 2026: Only record reef as culled if at least one site was actually controlled
