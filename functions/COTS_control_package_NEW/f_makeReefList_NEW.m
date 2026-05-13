@@ -421,11 +421,10 @@ switch META.COTS_reefs2cull_strat
         % Build full reef list in priority order:
         %   1. skip-region priority reefs (monitor-only) - first to protect budget before redistribution
         %   2. workable priority reefs (cull, incl. relocation candidates)
-        %   3. individually-hot priority reefs (monitor-only) - prioritise surveys before expanding to cull non-priority
-        % - Expand to NP: note they are sorted by CoTS risk and bleaching -
-        %   4. non-priority cool enough to cull
-        %   5. non-priority too hot to cull (monitor-only) - only when all_skip
-        full_list_ID = vertcat(skip_priority_reefs, priority_list_tmp2, skip_reef_local, nonpriority_tmp1);
+        %   3. non-priority cool enough to cull - expand culling before monitoring
+        %   4. individually-hot priority reefs (monitor-only) - monitored after all culling exhausted
+        %   5. non-priority too hot to cull (monitor-only) - only when all_skip, lowest priority
+        full_list_ID = vertcat(skip_priority_reefs, priority_list_tmp2, nonpriority_tmp1, skip_reef_local);
         if all_skip
             full_list_ID = vertcat(full_list_ID, nonpriority_cat_gt3);
         end
