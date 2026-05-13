@@ -65,7 +65,7 @@ current_reef_ET = repmat(0.075,[size(current_COTS_densities,1) 1]); % CANNOT BE 
 % current_COTS = current_COTS_densities;
 % [~, criteriaS, global_trigger, RESULT] = f_makeReefList_TS(META, RESULT, t, 0, current_COTS, thisboatorder, current_COTS_ET, COTS_densities_per_site);
 % ReefList = criteriaS.criteria(:,1); % TEMP - from now only use the ordered list of reef index
-[ReefList, unvisited, monitor_only_IDs, relocation_dist_km] = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site, total_coral_pct2D, COTS_larval_output, ...
+[ReefList, unvisited, monitor_only_IDs, relocation_dist_km, skip_region_idx_out, regional_bleaching_out] = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site, total_coral_pct2D, COTS_larval_output, ...
     CONNECT_CORAL, t, last_reef_COTScontrolled, ...
     bleaching_category, severely_bleached, control_records_prev, ...
     current_COTS_per_tow);
@@ -76,7 +76,8 @@ control_records=struct('culled_reef_ID',[], 'culled_density_reef',[], 'nb_culled
     'nb_dives',[], 'nb_culled_sites',[], 'nb_culled_reefs',[], 'nb_visited_reefs',[], ...
     'nb_control_sites' , [], 'nb_unvisited_reefs', height(unvisited), ...
     'additional_cull_ID', [], 'nb_additional_cull', 0, ...
-    'skip_region_monitor_ID', [], 'skip_region_monitor_dives', [], ...
+    'skip_region_monitor_ID', [], 'skip_region_monitor_dives', [], ...  % reefs monitored due to regional bleaching trigger
+    'skip_local_monitor_ID', [], 'skip_local_monitor_dives', [], ...    % priority reefs monitored because individually too hot (no valid relocation candidate)
     'additional_monitor_ID', [], 'additional_monitor_dives', [], ...
     'total_monitor_dives', 0, ...
     'nb_monitored_reefs', 0, 'remaining_dives', 0, 'remaining_region_dives', [], ...
@@ -88,7 +89,9 @@ control_records=struct('culled_reef_ID',[], 'culled_density_reef',[], 'nb_culled
     'site_skip_count', 0, 'site_skip_reef_ID', [], ... % count of skip-then-find events per timestep
     'site_skip_first_site', [], 'site_skip_success_site', [], ... % first site that exceeded budget, and the site that fit within budget
     'port_travel_dist_km', [], 'port_travel_dives', [], 'port_travel_from_region', [], 'port_travel_to_region', [], ... % case 1: inter-port travel when redistributing effort across regions
-    'reef_travel_dist_km', [], 'reef_travel_dives', [], 'reef_travel_from', [], 'reef_travel_to', [], 'total_travel_dives', 0); % case 2: inter-reef travel between relocation reefs and original bleaching cat>3 reefs
+    'reef_travel_dist_km', [], 'reef_travel_dives', [], 'reef_travel_from', [], 'reef_travel_to', [], 'total_travel_dives', 0, ... % case 2: inter-reef travel between relocation reefs and original bleaching cat>3 reefs
+    'skipped_regions', skip_region_idx_out, ... % numeric indices into META.COTS_cull_region of regions that exceeded the bleaching threshold this timestep ([] for non-adaptive strategies)
+    'regional_bleaching_pct', regional_bleaching_out); % proportion of severely bleached reefs per region at this timestep ([] for non-adaptive strategies)
 % Suki Apr 2026: site_skip_* fields:
 % These track the situation where a cull site on a reef requires more dives
 % than the remaining budget (global or regional), so it is skipped, and a
@@ -134,10 +137,13 @@ end
 if META.use_regional_dives && is_adaptive && ~isempty(monitor_only_IDs)
     proximity_order = {2; [3 4 1]; [4 2]; [3 2]}; 
 
-    % Identify skip-region priority reefs (type T or P) within the monitor_only list
+    % Identify skip-region priority reefs (type T or P, AND in a skip region) within the monitor_only list.
+    % Excludes individually-hot priority reefs (skip_reef_local) which are also T/P in monitor_only_IDs
+    % but should NOT trigger effort redistribution - their regional budget stays in their own region.
     [~, mo_rows] = ismember(monitor_only_IDs, META.COTS_cull_reeflist.Reef_ID);
     mo_types = META.COTS_cull_reeflist.reef_type(mo_rows);
-    priority_monitor_IDs = monitor_only_IDs(mo_types ~= 'N'); % T or P = skip-region priority reefs
+    [~, mo_region_tmp] = ismember(META.COTS_cull_reeflist.Region(mo_rows), META.COTS_cull_region);
+    priority_monitor_IDs = monitor_only_IDs(~strcmp(mo_types, 'N') & ismember(mo_region_tmp, skip_region_idx_out)); % T or P in skip regions only
 
     if ~isempty(priority_monitor_IDs)
         [~, pm_rows] = ismember(priority_monitor_IDs, META.COTS_cull_reeflist.Reef_ID);
@@ -272,10 +278,17 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
         remaining_dives = remaining_dives - monitor_dives_mo;
         remaining_region_dives(region_idx) = remaining_region_dives(region_idx) - monitor_dives_mo;
 
-        % Record monitoring
-        control_records.skip_region_monitor_ID     = [control_records.skip_region_monitor_ID; this_reef_ID];
-        control_records.skip_region_monitor_dives  = [control_records.skip_region_monitor_dives; monitor_dives_mo];
-        control_records.total_monitor_dives = sum(control_records.skip_region_monitor_dives) + sum(control_records.additional_monitor_dives);
+        % Record monitoring - route to the correct tracking field:
+        %   skip-region: reef's region exceeded the regional bleaching threshold
+        %   local-skip:  reef was individually too hot with no valid relocation candidate
+        if ismember(region_idx, skip_region_idx_out)
+            control_records.skip_region_monitor_ID    = [control_records.skip_region_monitor_ID;    this_reef_ID];
+            control_records.skip_region_monitor_dives = [control_records.skip_region_monitor_dives; monitor_dives_mo];
+        else
+            control_records.skip_local_monitor_ID    = [control_records.skip_local_monitor_ID;    this_reef_ID];
+            control_records.skip_local_monitor_dives = [control_records.skip_local_monitor_dives; monitor_dives_mo];
+        end
+        control_records.total_monitor_dives = sum(control_records.skip_region_monitor_dives) + sum(control_records.skip_local_monitor_dives) + sum(control_records.additional_monitor_dives);
         control_records.nb_monitored_reefs  = control_records.nb_monitored_reefs + 1;
         control_records.nb_control_sites    = [control_records.nb_control_sites; META.COTS_cull_reeflist.nb_sites(I)];
 
@@ -490,6 +503,10 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
                 COTS_per_tow_culled_this_site = sum(COTS_per_tow_this_site * age_props .* culling_dhw_effects) - current_reef_ET(I);
             end
 
+            % Clamp to zero: heat-stress-reduced detectibility can push effective CoTS per tow below ET,
+            % yielding a negative value that causes complex arithmetic in f_convert_CoTS_tow_2_density
+            COTS_per_tow_culled_this_site = max(0, COTS_per_tow_culled_this_site);
+
             % Convert the loss of CoTS per tow into loss of CoTS density - this time use a deterministic prediction (ie, NB_tows = 0)
             % to avoid negatives down the line
             COTS_density_culled_this_site = f_convert_CoTS_tow_2_density(COTS_per_tow_culled_this_site, 0, META.total_area_cm2);
@@ -556,7 +573,7 @@ while remaining_dives > 0 && n <= length(ReefList) %while there are dives remain
         control_records.additional_monitor_ID    = [control_records.additional_monitor_ID; this_reef_ID];     % ID of category-2 reefs where extra monitoring dives were added on top of culling
         control_records.nb_monitored_reefs = control_records.nb_monitored_reefs + 1;                            % running count of reefs with extra monitoring (category 2 only here; monitor-only reefs are counted in the monitor-only block above)
         control_records.additional_monitor_dives  = [control_records.additional_monitor_dives; monitor_dives];  % extra monitoring dives spent on this reef (1 dive per cull site)
-        control_records.total_monitor_dives = sum(control_records.skip_region_monitor_dives) + sum(control_records.additional_monitor_dives); % total monitoring dives spent across all monitored reefs this timestep
+        control_records.total_monitor_dives = sum(control_records.skip_region_monitor_dives) + sum(control_records.skip_local_monitor_dives) + sum(control_records.additional_monitor_dives); % total monitoring dives spent across all monitored reefs this timestep
     end
 
     control_records.visited_reef_ID = [control_records.visited_reef_ID; this_reef_ID];                          % ID of every reef where a manta tow was performed (includes culled, monitor-only, and category-2 reefs)

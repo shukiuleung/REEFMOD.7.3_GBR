@@ -7,7 +7,7 @@
 % - f_makeReefListCCS from Carolina Castro-Sanguino (REEFMOD-GBR.6.6, Mar 2022)
 % - f_makeReefListTS from Tina Skinner (REEFMOD-GBR.6.8, May 2023)
 % ----------------------------------------------------------------------------------------------------------------------
-function [full_list_ID, unvisited, monitor_only_IDs, relocation_dist_km] = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site,...
+function [full_list_ID, unvisited, monitor_only_IDs, relocation_dist_km, skip_region_idx, regional_bleaching] = f_makeReefList_NEW(META, current_COTS_densities, current_reef_ET, COTS_densities_per_site,...
     total_coral_pct2D, COTS_larval_output, CONNECT_CORAL, t, last_reef_COTScontrolled, ...
     bleaching_category, severely_bleached, control_records_prev, ...
     current_COTS_per_tow)
@@ -32,6 +32,8 @@ function [full_list_ID, unvisited, monitor_only_IDs, relocation_dist_km] = f_mak
 unvisited = []; % initialize the list of unvisited reefs, to keep track of which reefs in the priority list are not visited at each time step due to bleaching
 monitor_only_IDs = []; % initialize list of reefs to be monitored only (not culled) due to regional bleaching
 relocation_dist_km = struct('reef_ID', [], 'original_reef_ID', [], 'dist_km', []); % relocation travel distances: candidate reef ID, original (bleaching cat>3) reef ID, distance in km
+skip_region_idx = []; % indices into META.COTS_cull_region of regions that exceeded the regional bleaching threshold this timestep
+regional_bleaching = []; % proportion of severely bleached reefs per region (length = nb of cull regions)
 
 %% Allow for permutation of reef prioritisation
 if META.COTS_cull_fixed_reeflist == 1 % if the reef prioritisation list is fixed over time
@@ -388,12 +390,11 @@ switch META.COTS_reefs2cull_strat
         [~, np_pos] = ismember(nonpriority_tmp0, META.reef_ID);
         nonpriority_tmp1 = nonpriority_tmp0(bleaching_category(np_pos) <= cull_threshold & ~ismember(nonpriority_tmp0, priority_list_tmp2));
 
-        % Build monitor_only_IDs: skip-region priority reefs are always monitor-only.
-        % If the 'expand' condition is met: also include non-priority reefs with bleaching category > 3
-        % (they are surveyed but cannot be culled efficiently), and no effort is redistributed to other regions.
-        % Case 20 (default): expand only when ALL regions are skip.
-        % Case 25: expand when at least 3 regions are skip (>=3 unworkable -> no redistribution).
-        % Case 26: always expand (never redistribute, regardless of how many regions are skip).
+        % all_skip: when true, effort stays within each region (no redistribution to workable adjacent region).
+        % Also gates whether non-priority reefs too hot to cull are added for monitoring.
+        % Case 20 (default): all_skip when ALL regions are skip.
+        % Case 25: all_skip when >=3 regions are skip.
+        % Case 26: always all_skip (never redistribute).
         switch META.COTS_reefs2cull_strat
             case 25
                 all_skip = length(skip_region_idx) >= 3;
@@ -402,25 +403,35 @@ switch META.COTS_reefs2cull_strat
             otherwise
                 all_skip = length(skip_region_idx) == length(META.COTS_cull_region);
         end
-        monitor_only_IDs = skip_priority_reefs;
+
+        % Priority reefs skipped at the individual reef level (too hot, no valid relocation candidates).
+        % Always added to monitor_only_IDs and full_list_ID so effort is used for monitoring if budget remains.
+        skip_reef_local = priority_list_tmp1(~ismember(priority_list_tmp1, priority_list_tmp2));
+
+        % monitor_only_IDs: reefs surveyed (manta tow) but NOT culled this timestep:
+        %   1. skip-region priority reefs (regional bleaching trigger) - always
+        %   2. individually-hot priority reefs with no valid relocation candidates - always
+        %   3. non-priority reefs too hot for culling - only when all_skip
+        monitor_only_IDs = vertcat(skip_priority_reefs, skip_reef_local);
         if all_skip
             nonpriority_cat_gt3 = nonpriority_tmp0(bleaching_category(np_pos) > cull_threshold & ~ismember(nonpriority_tmp0, priority_list_tmp2));
             monitor_only_IDs = vertcat(monitor_only_IDs, nonpriority_cat_gt3);
         end
 
-        % Build full reef list: skip-region priority (monitor-only) first to protect their global budget,
-        % then workable priority reefs (including relocation candidates), then cullable non-priority,
-        % then (if all-skip) monitor-only non-priority reefs.
-        % skip_priority_reefs must come first: they are cheap to monitor (1 dive/site) but could be
-        % starved of global dives if relocation candidates (which may be large non-priority reefs) go first.
-        full_list_ID = vertcat(skip_priority_reefs, priority_list_tmp2, nonpriority_tmp1);
+        % Build full reef list in priority order:
+        %   1. skip-region priority reefs (monitor-only) - first to protect budget before redistribution
+        %   2. workable priority reefs (cull, incl. relocation candidates)
+        %   3. individually-hot priority reefs (monitor-only) - prioritise surveys before expanding to cull non-priority
+        % - Expand to NP: note they are sorted by CoTS risk and bleaching -
+        %   4. non-priority cool enough to cull
+        %   5. non-priority too hot to cull (monitor-only) - only when all_skip
+        full_list_ID = vertcat(skip_priority_reefs, priority_list_tmp2, skip_reef_local, nonpriority_tmp1);
         if all_skip
             full_list_ID = vertcat(full_list_ID, nonpriority_cat_gt3);
         end
 
-        % unvisited: priority reefs skipped due to individual reef bleaching (cat 4/5, locally relocated)
-        % Note: skip-region priority reefs are no longer unvisited - they are monitored (in monitor_only_IDs)
-        skip_reef_local = priority_list_tmp1(~ismember(priority_list_tmp1, priority_list_tmp2));
+        % unvisited: priority reefs skipped due to individual reef bleaching (cat 4/5, no valid candidates).
+        % These are now added to full_list_ID for monitoring but recorded here for diagnostics.
         [~, idx_local] = ismember(skip_reef_local, META.COTS_cull_reeflist.Reef_ID);
         [~, region_local] = ismember(META.COTS_cull_reeflist.Region(idx_local), META.COTS_cull_region);
 
@@ -432,6 +443,7 @@ switch META.COTS_reefs2cull_strat
                 'VariableNames', {'Reef_ID', 'Region'});
         end
         % Columns: Reef_ID, Reason (1=individual reef bleaching/local relocation), Region
+        fprintf('t=%d: full_list_ID=%d, priority_list_tmp2=%d, nonpriority_tmp1=%d, unvisited=%d\n', t, length(full_list_ID), length(priority_list_tmp2), length(nonpriority_tmp1), height(unvisited));
 
 end
 
@@ -441,3 +453,4 @@ if last_reef_COTScontrolled ~= 0 % would be 0 if no reefs have been visited befo
     full_list_ID(full_list_ID == last_reef_COTScontrolled,:)=[]; % delete the last controlled reef from the list, wherever it is
     full_list_ID = [New_toplist ; full_list_ID]; % Put the last controlled reef on top of the list -> will be visited first
 end
+

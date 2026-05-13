@@ -30,7 +30,9 @@ clear
 
 SaveDir ='';
 
-NB_SIMULATIONS = 1; % Number of repeated runs
+rng(123)
+
+NB_SIMULATIONS = 10; % Number of repeated runs
 
 % NB_TIME_STEPS has to be an even number. 
 % Always run the hindcast before future projections (initialisation = winter 2007)
@@ -45,7 +47,7 @@ format_extract = 'short' ; % annual outputs (every year)
 % format_extract = 'long' ; % seasonal outputs (every 6 months) (native time resolution)
 
 % Set the name for the output file. Will add suffix 's' for 'short' or 'l' for 'long'
-OutputName = 'test_strat19'; options = [1 1 1 1 0 1 0.3 0]; % see list of options below
+OutputName = 'strat1_20'; options = [1 1 1 1 0 1 0.3 0]; % see list of options below
 
 %% select the Global Circulation Model for climate change projection (CMIP-6)
 GCM = 1; % 1=CNRM-ESM2-1, 2=EC-Earth3-Veg, 3=IPSL-CM6A-LR, 4=MRI-ESM2-0, 5=UKESM1-0-LL, ...
@@ -148,7 +150,7 @@ OUTPUTS = struct('REEF', [],'RESULT', [],'RECORD', []);
 TEMP_META = struct('META', []);
 
 % parfor run_id = 1:NB_SIMULATIONS
-for run_id = 1:NB_SIMULATIONS
+parfor run_id = 1:NB_SIMULATIONS
 
     run_id
 
