@@ -235,7 +235,7 @@ if META.doing_genetics == 0 % NO GENETIC ADAPTATION (WITH THERMAL OPTIMUM)
     
     %% PAST THERMAL STRESS REGIME
     % Using NOAA Coral Reef Watch 5km product: max DHW every year from 1985 to 2023 from closest 5x5 km pixel (updated Jan 2024)   
-    load('GBR_past_DHW_CRW_5km_1985_2024.mat')
+    load('GBR_past_DHW_CRW_5km_1985_2026.mat')
     GBR_PAST_DHW = GBR_PAST_DHW(:,24:end); % col 24 is for 2008
   
     end_hindcast = size(GBR_PAST_DHW,2);
@@ -298,7 +298,7 @@ end
 % Feb 2025: now modelling the wind field to estimate past cyclone categories
 % load('GBR_cyclones_2008-2024.mat') % Using Holland's model
 % load('GBR_cyclones_2008-2024_BOOSE.mat')
-load('GBR_cyclones_2008-2024_HOURLY.mat')% Using Holland's model with asymmetry and cyclone tracks with hourly interpolation
+load('GBR_cyclones_2008-2026.mat')% Using Holland's model with asymmetry and cyclone tracks with hourly interpolation
 
 CYCLONE_CAT = zeros(length(META.reef_ID),2*size(GBR_PAST_CYCLONES,2)) ;
 CYCLONE_CAT(:,1:2:end) = GBR_PAST_CYCLONES(META.reef_ID,:);

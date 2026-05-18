@@ -61,8 +61,6 @@ for n = 1:length(META.reef_ID)
     
     % Assign to every reef the defaut background density of CoTS
     if META.doing_COTS == 1
-
-        REEF(n).initial_COTS_per_tow = init_COTS_per_tow(n); % Feb 2026 -> new CoTS initialisation
         REEF(n).COTS_background_density = META.COTS_background_density;
         
         % TINA: Assign specific mortality rate based on reef protection status

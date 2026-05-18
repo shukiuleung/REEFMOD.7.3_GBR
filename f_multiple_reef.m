@@ -150,7 +150,7 @@ rng(simul); % to get a repeatable scheme of random number generation in RAND, RA
 
 INITIALISATION
 
-settings_GBR_v2_0
+settings_GBR_NEW % switch to settings_GBR_v2_0 for new initialisation without observation forcing of CoTS
 
 if META.doing_restoration == 1
 
@@ -250,6 +250,6 @@ end
 
 
 %% RUN THE MODEL WITH THIS SETUP
-clearvars -except META REEF CORAL ALGAL CONNECT_CORAL CONNECT_COTS REEF_POP
+clearvars -except META REEF CORAL ALGAL CONNECT_CORAL CONNECT_COTS REEF_POP REEF_COTS
 
-[RESULT, RECORD] = f_runmodel(META, REEF, CORAL, ALGAL, CONNECT_CORAL, CONNECT_COTS, REEF_POP) ; % Feb 2025: need to feed with two connectivity sets
+[RESULT, RECORD] = f_runmodel(META, REEF, CORAL, ALGAL, CONNECT_CORAL, CONNECT_COTS, REEF_POP, REEF_COTS) ; % Feb 2025: need to feed with two connectivity sets

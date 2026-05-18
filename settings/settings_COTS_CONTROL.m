@@ -80,7 +80,7 @@ META.COTS_reefs2cull_strat = 1;
 % Leave empty ([]) to use META.COTS_reefs2cull_strat for all timesteps.
 % Example: run strat 1 from control start, then switch to strat 19 from t=35 onwards:
 % META.COTS_strat_schedule = [META.COTS_control_start, 1; 35, 19];
-META.COTS_strat_schedule = [META.COTS_control_start, 1; 37, 20];
+META.COTS_strat_schedule = [META.COTS_control_start, 1; 39, 20]; % new adaptive control starts in 2027 summer
 
 % Updates from Tina (July 2023) - now have fixed target reef list. Control at T, then P, then N.
 load('New_regions_TS_SL.mat') %this has been updated for new GBRMPA 2023 PR list and includes target reefs now
