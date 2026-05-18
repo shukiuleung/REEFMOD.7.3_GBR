@@ -249,7 +249,7 @@ bonus_thermal = 0.1;  % easy to tune
 bonus_zoning  = 0.1;  % easy to tune
 
 switch scenario
-    case 1   % default
+    case 1   % default AC
         score = culled_rank_n * w_cull_record + manta_tow_rank_n * w_manta_record + reef_priority_rank * w_priority + bleaching_category_rank * w_bleaching_category + distance_rank_n * w_distance;
     case 2   % perfect knowledge a - case 27 in f_makeReefList_NEW
         score = cots_risk_rank_n * w_cots_risk + cots_per_tow_rank_n * w_predicted_manta + reef_priority_rank * w_priority + bleaching_category_rank * w_bleaching_category + distance_rank_n * w_distance;
