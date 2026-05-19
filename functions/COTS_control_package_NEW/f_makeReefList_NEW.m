@@ -64,6 +64,8 @@ switch META.COTS_reefs2cull_strat
 
     case 1 % GBRMPA strategy that goes to Target reefs first, then Priority reefs, then Non Priority reefs
         full_list_ID = vertcat(target_ID, priority_ID, nonpriority_ID); % just catenate the 3 lists
+        % filter to only workable reefs
+        full_list_ID = full_list_ID(ismember(full_list_ID, META.workable.ReefID(META.workable.GBRMP == 1 & META.workable.Within250kmOfPort == 1 & META.workable.Shallow == 1)));
 
     case 9  % Outbreak front: GBRMPA strategy that goes to target reefs first, then also goes to 0.5' lat (~50 km)
         % from target reefs with outbreaks - whole GBR.
