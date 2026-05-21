@@ -83,7 +83,7 @@ if META.doing_genetics == 0 % NO GENETIC ADAPTATION (WITH THERMAL OPTIMUM)
     DHW(:,1:2:end_hindcast*2) = GBR_PAST_DHW(META.reef_ID,:);
 
     %% FUTURE THERMAL STRESS (CMIP6)
-    start_future = 35; % Forecast starts in 2025 (step 35)
+    start_future = 39; % Forecast starts in 2025 (step 35)
     % Need to be odd number (always start future in summer)
     
     if META.nb_time_steps >= start_future
@@ -155,7 +155,7 @@ META.allow_cyclone_cooling = ones(1, META.nb_time_steps);
 META.allow_cyclone_cooling(1:17) = 0;
     
 %% FUTURE STORM REGIME (from 2025 onwards)
-if META.nb_time_steps > 34
+if META.nb_time_steps > 36
     
     load('Reef_Cyclone_TimeSeries_Count_Cat.mat')
     
