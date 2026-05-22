@@ -202,13 +202,15 @@ REEF_COTS.densities_SD(:,1) = PAST_COTS_SD_COCONET(META.reef_ID,start_year); % d
 % and larval-stock recruitment relationships (Suki's optimisation against CoTS observations with GBRLUP connectivity
 % We only use available observations at initial step (replacing CoCONet predictions where observations available between 2006-2007.5
 % Mean coTS per tow from AIMS LTMP (ID=1), FMP (ID=2) and Control Program (ID=3). Missing values identified as NaN.
-load('GBR_PAST_COTS_1992_2025.mat') % 67 columns from 1992 to 2022.5 inclusive
+load('GBR_PAST_COTS_1992_2026.mat') % now 70 columns 1992 to 2026.5 inclusive
+% 67 columns from 1992 to 2022.5 inclusive
 % 2025, 2024.5, 2024, 2023.5: only CP ; 2023: CP+FMP ; 2022.5: CP+FMP+LTMP
 
-GBR_PAST_COTS_PER_GRID = (GBR_PAST_COTS_NEW(META.reef_ID,:)/0.22)*(1500/2500); % Conversion: 1500 COTS per km2 ~0.22 per manta tow (Moran and De'ath 1986)
-% which is further divided by 2500 to get number of COTS per 400m2 (reef grid size)
+% settings from settings_GBR_v2_0 - 100 tows to keep moderate level of
+% stochasticity
+GBR_PAST_COTS_PER_GRID = f_convert_CoTS_tow_2_density(GBR_PAST_COTS_NEW(META.reef_ID,:), 100, META.total_area_cm2);
 
-COTS_years = 1992:0.5:2025;
+COTS_years = 1992:0.5:2026.5;
 start_step = find(COTS_years==2007.5);
 end_step = size(GBR_PAST_COTS_PER_GRID,2);
 length_history = length(start_step:end_step);
